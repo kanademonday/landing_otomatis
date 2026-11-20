@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -84,7 +84,10 @@ async function fetchJSON(url, opts, label, timeoutMs = 60000) {
   clearTimeout(tm);
   const txt = await res.text();
   LOG.info(`${label} ← HTTP ${res.status} (${txt.length} byte, ${Math.round(performance.now() - t0)} ms)`);
-  if (!res.ok) { LOG.error(`${label}: HTTP ${res.status}`, txt.slice(0, 1000)); throw new Error(`${label}: HTTP ${res.status} ${txt.slice(0, 160)}`); }
+  if (!res.ok) {
+    if (opts && opts.quiet404 && res.status === 404) { const er = new Error(`${label}: belum tersedia (404)`); er.status = 404; throw er; }
+    LOG.error(`${label}: HTTP ${res.status}`, txt.slice(0, 1000)); throw new Error(`${label}: HTTP ${res.status} ${txt.slice(0, 160)}`);
+  }
   try { return JSON.parse(txt); } catch (e) { LOG.error(`${label}: respons bukan JSON`, txt.slice(0, 1000)); throw new Error(`${label}: respons bukan JSON`); }
 }
 
@@ -178,9 +181,10 @@ function kelLabel() { const k = $('inKel').value; return !k || k === '*' ? 'Kec.
 async function muatData(file, label) {
   for (const base of DATA_URLS) {
     if (!/^https?:/.test(base) && location.protocol === 'file:') continue; // file:// tidak bisa membaca file lokal lain
-    try { return await fetchJSON(base + file, {}, label, 180000); }
-    catch (e) { LOG.warn(`${label}: tidak tersedia di ${base}`); }
+    try { return await fetchJSON(base + file, { quiet404: true }, label, 180000); }
+    catch (e) { if (e.status !== 404) LOG.warn(`${label}: gagal dari ${base}`, e.message); }
   }
+  LOG.warn(`${label}: file ${file} belum ada di repo (menunggu GitHub Action "Perbarui data Samarinda") — sementara memakai pencarian & unduhan online.`);
   return null;
 }
 function decodeJalan(J) {
@@ -209,7 +213,7 @@ function renderDataInfo() {
   $('dataInfo').innerHTML = `${f(st.wil)} Batas wilayah: ${st.wil === 'siap' ? nKel + '/59 kelurahan' : st.wil}<br>` +
     `${f(st.jalan)} Jalan seluruh Samarinda: ${st.jalan === 'siap' ? SMD.jalan.ways.length.toLocaleString('id') + ' ruas' : st.jalan}` +
     (SMD.jalan && SMD.jalan.dibuat ? `<br><span class="hint">Data OSM per ${esc(SMD.jalan.dibuat)}</span>` : '') +
-    (st.jalan === 'tidak tersedia' ? '<br><span class="hint">Data tersimpan belum ada — pilih kelurahan lalu klik "Ambil ulang dari internet".</span>' : '');
+    (st.jalan === 'tidak tersedia' ? '<br><span class="hint">Data tersimpan sedang disiapkan oleh GitHub Action. Sementara ini: pilih kelurahan (batas dicari via internet), lalu klik <b>Ambil ulang dari internet</b>.</span>' : '');
 }
 async function initDataSamarinda() {
   renderDataInfo();

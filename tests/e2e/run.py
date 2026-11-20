@@ -15,7 +15,7 @@ async def main():
       if 'leaflet' in u and u.endswith('.js'): await r.fulfill(body=MOCK,content_type='application/javascript')
       elif '/data/samarinda_' in u:
         f=D+'data/'+u.split('/data/')[1]
-        if os.path.exists(f): await r.fulfill(body=open(f).read(),content_type='application/json')
+        if os.path.exists(f) and not os.environ.get('NODATA'): await r.fulfill(body=open(f).read(),content_type='application/json')
         else: await r.fulfill(status=404,body='')
       elif 'nominatim' in u: await r.fulfill(body=open(D+'nominatim.json').read(),content_type='application/json')
       elif 'overpass' in u: await r.fulfill(body=open(D+'overpass.json').read(),content_type='application/json')
