@@ -16,10 +16,10 @@ Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya pa
 
 ## Cara pakai
 
-1. **Wilayah**: pilih kecamatan dan kelurahan di bilah atas. Batas dan jalan langsung terpasang.
-2. **Gambar**: muat surat ukur / gambar situasi / peta analog, isi **luas tanah (m²)** sesuai BT/SU, telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Bidang lain pada peta analog digambar dengan alat *Bidang lain*. Ctrl+Z untuk mengurungkan.
+1. **Wilayah**: pilih kecamatan dan kelurahan. Batas dan jalan langsung terpasang.
+2. **Gambar**: muat surat ukur / gambar situasi / peta analog, isi **luas tanah (m²)** sesuai BT/SU, telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Putar gambar agar utara menghadap ke atas (alat *Panah utara*) dan pilih seberapa yakin arah utaranya. Bidang lain pada peta analog digambar dengan alat *Bidang lain*. Ctrl+Z untuk mengurungkan.
 3. **Cocokkan**: lihat pratinjau tiap kandidat, pilih yang jalannya paling menempel. Bila meleset, pakai titik ikat.
-4. **Hasil**: nyalakan *Gambar situasi di peta* untuk membandingkan dengan citra satelit, geser halus bila perlu, lalu **Unduh DXF** (TM-3) untuk AutoCAD.
+4. **Hasil**: nyalakan *Gambar situasi di peta* untuk membandingkan dengan citra satelit, geser halus bila perlu (termasuk *bidang saja* atau *sejajarkan dengan jalan* bila bidang di gambar lebih miring dari aslinya), lalu **Unduh DXF** (TM-3) untuk AutoCAD.
 
 Gambar dan data yang dimuat hanya diproses di browser, tidak dikirim ke repo ini.
 
@@ -57,6 +57,7 @@ node tests/e2e/gen.js && python3 tests/e2e/prepare.py && python3 tests/test_fetc
 python3 tests/e2e/run.py         # uji alur penuh (butuh playwright + chrome)
 python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
 python3 tests/e2e/run3.py        # uji gambar di peta, pratinjau, urungkan, ekspor DXF
+python3 tests/e2e/run4.py        # uji putar gambar, arah utara, geser bidang saja, sejajarkan
 ```
 
 ## Cara kerja singkat

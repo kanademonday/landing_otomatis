@@ -34,6 +34,9 @@ function cekKewajaran(r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
     else if (r.score < 0.8) tanda('warn', 'Skor kecocokan sedang. Bandingkan gambar dengan citra satelit sebelum dipakai.');
     else tanda('ok', 'Jalan pada gambar menempel baik pada jalan nyata.');
+    const dth = Math.abs(CORE.normAng(S.T.th)) / DEG, nm = $('inNorthMode').value;
+    if (nm !== 'bebas' && dth > 8) tanda('warn', `Agar cocok, gambar harus diputar ${fmt(dth, 1)}° dari arah utaranya. Panah utara di gambar mungkin kurang tepat; periksa di citra satelit.`);
+    else if (nm === 'bebas') tanda('info', `Hasil cocok memutar gambar ${fmt(dth, 1)}° dari arah atas gambar.`);
     const c = S.cands; if (c.length > 1 && c[0].r && c[1].r && c[0].r.score - c[1].r.score < 0.06) tanda('warn', 'Ada kandidat lain dengan skor hampir sama. Posisi bisa tertukar; lihat pratinjau di langkah 3.');
   }
   tanda('info', 'Nyalakan "Gambar di peta" dan bandingkan atap, pagar, dan batas kebun di citra satelit.');
@@ -157,3 +160,83 @@ function urungkan() {
   const o = JSON.parse(prev); S.roads = o.roads; S.parcel = o.parcel; S.extra = o.extra; S.cps = o.cps;
   HIST.last = prev; HIST.skip = true; onSketchChanged(); HIST.skip = false;
 }
+
+/* ---------- putar gambar agar utara menghadap ke atas ---------- */
+const ROT = { deg: 0, orig: null, el: null };
+function rotAsli(dataURL, w, h) { ROT.deg = 0; ROT.orig = { dataURL, w, h, mime: (dataURL.match(/^data:(image\/\w+)/) || [])[1] || 'image/png' }; ROT.el = null; tampilRot(); }
+function ukuranPutar(w, h, deg) { const a = deg * DEG; return [Math.round(Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))), Math.round(Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a)))]; }
+// titik gambar asli → gambar terputar (deg searah jarum jam di layar)
+function keRot(p, deg, w0, h0, w1, h1) { const a = deg * DEG, c = Math.cos(a), s = Math.sin(a), dx = p[0] - w0 / 2, dy = p[1] - h0 / 2; return [c * dx - s * dy + w1 / 2, s * dx + c * dy + h1 / 2]; }
+function keAsli(p, deg, w0, h0, w1, h1) { const a = -deg * DEG, c = Math.cos(a), s = Math.sin(a), dx = p[0] - w1 / 2, dy = p[1] - h1 / 2; return [c * dx - s * dy + w0 / 2, s * dx + c * dy + h0 / 2]; }
+function tampilRot() { const e = $('rotInfo'); if (e) e.textContent = ROT.deg ? `Gambar sudah diputar ${fmt(ROT.deg, 1)}° dari aslinya.` : 'Gambar belum diputar.'; }
+const putarGambar = safe('Putar gambar', async (delta) => {
+  if (!S.img || !ROT.orig) throw new Error('Muat gambar dulu.');
+  if (SK.cur) SK.cur = null;
+  let nd = ROT.deg + delta; while (nd > 180) nd -= 360; while (nd <= -180) nd += 360;
+  nd = Math.round(nd * 100) / 100;
+  const o = ROT.orig;
+  if (!ROT.el) { ROT.el = new Image(); ROT.el.src = o.dataURL; await new Promise((ok, no) => { ROT.el.onload = ok; ROT.el.onerror = () => no(new Error('Gambar asli tidak bisa dibaca')); }); }
+  const [w1, h1] = ukuranPutar(o.w, o.h, nd);
+  if (w1 * h1 > 40e6) throw new Error('Gambar terlalu besar untuk diputar. Perkecil resolusi gambar terlebih dahulu.');
+  const cv = document.createElement('canvas'); cv.width = w1; cv.height = h1;
+  const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, w1, h1);
+  c.translate(w1 / 2, h1 / 2); c.rotate(nd * DEG); c.drawImage(ROT.el, -o.w / 2, -o.h / 2);
+  // pindahkan semua titik yang sudah digambar ke koordinat gambar baru
+  const W0 = S.img.w, H0 = S.img.h, ubah = p => keRot(keAsli(p, ROT.deg, o.w, o.h, W0, H0), nd, o.w, o.h, w1, h1);
+  S.roads.forEach(r => r.pts = r.pts.map(ubah));
+  if (S.parcel) S.parcel = S.parcel.map(ubah);
+  S.extra.forEach(e => e.pts = e.pts.map(ubah));
+  S.cps.forEach(cp => cp.img = ubah(cp.img));
+  ROT.deg = nd;
+  S.cands = []; S.sel = -1; S.T = null; CTX = null; S.adj = { dx: 0, dy: 0, dth: 0 };
+  if (map) { G.cand.clearLayers(); G.res.clearLayers(); }
+  $('candList').innerHTML = '<p class="hint">Gambar diputar; jalankan pencocokan lagi.</p>';
+  const url = cv.toDataURL(o.mime === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92);
+  setImage(url, S.img.name, true, true);
+  LOG.info(`Gambar diputar ${fmt(delta, 1)}° (total ${fmt(nd, 1)}°)`, { w: w1, h: h1 });
+  tampilRot(); aturOverlay();
+});
+function selesaiPanahUtara(a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  if (Math.hypot(dx, dy) < 5) { toast('Panah terlalu pendek. Klik pangkal lalu ujung panah utara.', 'warn'); return; }
+  const phi = Math.atan2(dx, -dy) / DEG; // sudut panah dari arah atas, searah jarum jam
+  if ($('inNorthMode').value === 'bebas') $('inNorthMode').value = 'kira';
+  LOG.info(`Panah utara ditandai: ${fmt(phi, 1)}° dari atas gambar`);
+  if (Math.abs(phi) < 0.3) { toast('Panah utara sudah menghadap ke atas.', 'ok'); return; }
+  putarGambar(-phi);
+  toast(`Gambar diputar ${fmt(-phi, 1)}° agar utara menghadap ke atas.`, 'ok');
+}
+
+/* ---------- geser/putar bidang saja & sejajarkan dengan jalan ---------- */
+function terapkanAdj(pts) {
+  const a = S.adj; if (!a || (!a.dx && !a.dy && !a.dth)) return pts;
+  const c = CORE.centroid(pts), cs = Math.cos(a.dth), sn = Math.sin(a.dth);
+  return pts.map(p => { const x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + cs * x - sn * y + a.dx, c[1] + sn * x + cs * y + a.dy]; });
+}
+function sejajarkanJalan() {
+  if (!S.T || !S.parcel || !S.osm) { toast('Pilih kandidat dulu.', 'warn'); return; }
+  const P = parcelWorld(S.T, false), segs = [];
+  const c0 = CORE.centroid(P);
+  for (const w of S.osm.ways) {
+    const pts = w.nodes.map(id => S.osm.nodes[id]).filter(Boolean).map(p => PROJ.fwd(p[0], p[1]));
+    for (let i = 1; i < pts.length; i++) { const m = [(pts[i][0] + pts[i - 1][0]) / 2, (pts[i][1] + pts[i - 1][1]) / 2]; if (Math.hypot(m[0] - c0[0], m[1] - c0[1]) < 250) segs.push([pts[i - 1], pts[i]]); }
+  }
+  if (!segs.length) { toast('Tidak ada jalan di dekat bidang.', 'warn'); return; }
+  let best = null;
+  P.forEach((a, i) => {
+    const b = P[(i + 1) % P.length], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], ea = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    for (const [p, q] of segs) {
+      const d = CORE.plNearest([p, q], m).d; if (d > 40) continue;
+      let diff = CORE.normAng(Math.atan2(q[1] - p[1], q[0] - p[0]) - ea);
+      if (diff > Math.PI / 2) diff -= Math.PI; if (diff < -Math.PI / 2) diff += Math.PI;
+      if (!best || d < best.d) best = { d, diff, i };
+    }
+  });
+  if (!best) { toast('Tidak ada sisi bidang yang berdekatan dengan jalan (≤ 40 m).', 'warn'); return; }
+  if (Math.abs(best.diff) > 25 * DEG) { toast(`Sisi terdekat berbeda ${fmt(Math.abs(best.diff) / DEG, 1)}° dari arah jalan; terlalu besar untuk disejajarkan otomatis.`, 'warn'); return; }
+  S.adj.dth += best.diff;
+  LOG.info(`Bidang disejajarkan dengan jalan: putar ${fmt(best.diff / DEG, 2)}° (sisi ${best.i + 1}, jarak ${fmt(best.d, 1)} m)`);
+  toast(`Bidang diputar ${fmt(best.diff / DEG, 1)}° agar sisi ${best.i + 1} sejajar jalan.`, 'ok');
+  tandaiDisesuaikan(); renderResult(); drawCands();
+}
+function tandaiDisesuaikan() { if (S.sel >= 0 && !S.cands[S.sel].label.includes('disesuaikan')) S.cands[S.sel].label += ' (disesuaikan)'; }

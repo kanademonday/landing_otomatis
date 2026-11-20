@@ -2,6 +2,12 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.2.0 — 2026-11-20 — Arah utara & gambar tulisan tangan
+- **Kecamatan dan kelurahan** dipilih di halaman langkah 1 (tidak lagi di bilah atas).
+- **Putar gambar agar utara menghadap ke atas**: alat *Panah utara* (klik pangkal lalu ujung panah, gambar diputar otomatis) dan tombol putar ±90°, ±5°, ±1°. Garis yang sudah ditelusuri ikut berputar, tanpa pergeseran.
+- **Keyakinan arah utara**: *tidak dipakai* (cari ke segala arah), *kira-kira* (±45°), atau *yakin* (±15°). Bila hasil cocok harus memutar gambar lebih dari 8° dari utaranya, muncul peringatan bahwa panah utara di gambar mungkin keliru. Tiap kandidat menampilkan putarannya dari arah atas gambar.
+- **Bidang lebih miring dari aslinya**: di langkah Hasil, pilih *Geser bidang saja* untuk menggeser/memutar bidang tanpa ikut menggeser jalan, atau tombol **Sejajarkan bidang dengan jalan** (memutar bidang agar sisi terdekat sejajar jalan, bila selisihnya ≤ 25°). *Kembalikan bidang* membatalkannya.
+
 ## v2.1.0 — 2026-11-20 — Fokus pencarian lewat gambar situasi
 **Dihapus** (belum bisa dipakai untuk bidang KW 4–6 yang belum ada di peta pendaftaran): daftar bidang beserta status dan rekap, impor bidang acuan, isian luas buku tanah terpisah, KW dan status di kop gambar, bantuan AI, serta semua ekspor selain DXF (KML, KMZ, CSV, GeoJSON, PNG, world file). Isian "perkiraan lebar gambar" juga dihapus: **luas tanah (m²) kini wajib**, sesuai BT/SU/spreadsheet.
 

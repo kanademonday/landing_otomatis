@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -97,14 +97,14 @@ const S = {
   osm: null,          // {nodes:{id:[lat,lon]}, ways:[{id,name,hw,nodes}]}
   proj0: null,        // {lat0,lon0}
   img: null,          // {dataURL,w,h,name}
-  roads: [], parcel: null, cps: [], extra: [],
+  roads: [], parcel: null, cps: [], extra: [], adj: { dx: 0, dy: 0, dth: 0 },
   cands: [], sel: -1, T: null,
   aiBackup: null, mapMode: null, cpIdx: 0
 };
 let PROJ = null, CTX = null, imgEl = null, inAreaFn = null;
 function stateSummary() {
   const o = {
-    input: { kota: $('inKota')?.value, kec: $('inKec')?.value, kel: $('inKel')?.value, luas: $('inLuas')?.value, utara: $('inNorth')?.checked ? $('inNorthDeg').value + '°' : 'tidak' },
+    input: { kota: $('inKota')?.value, kec: $('inKec')?.value, kel: $('inKel')?.value, luas: $('inLuas')?.value, utara: $('inNorthMode')?.value, putarGambar: typeof ROT !== 'undefined' ? ROT.deg : 0, adjBidang: S.adj },
     wilayah: S.wil ? { nama: S.wil.name, poligon: S.wil.hasPoly, ring: S.wil.rings.length, titik: S.wil.rings.reduce((a, r) => a + r.length, 0) } : null,
     proj0: S.proj0,
     osm: S.osm ? { ruas: S.osm.ways.length, node: Object.keys(S.osm.nodes).length, bernama: S.osm.ways.filter(w => w.name).length } : null,
@@ -281,7 +281,7 @@ function bidangBaru(silent) {
   S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.extra = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
   for (const id of ['inLuas', 'inNama', 'inRoadName', 'inExtraName']) $(id).value = '';
   $('qcInfo').innerHTML = ''; resetRiwayat(); aturOverlay();
-  $('inNorth').checked = false; $('inNorthDeg').value = 0; $('fileImg').value = '';
+  $('inNorthMode').value = 'bebas'; S.adj = { dx: 0, dy: 0, dth: 0 }; $('fileImg').value = '';
   if (map) { G.cand.clearLayers(); G.res.clearLayers(); G.cp.clearLayers(); }
   $('candList').innerHTML = '<div class="hint">Belum ada.</div>'; $('prog').style.width = '0'; $('progTx').textContent = '';
   $('resInfo').textContent = 'Pilih kandidat dulu di langkah 3.'; $('vtx').innerHTML = '';
@@ -590,6 +590,12 @@ function skDraw() {
     c.lineWidth = 3; c.strokeStyle = '#000'; c.strokeText(t, q[0], q[1] - 8); c.fillStyle = '#fff'; c.fillText(t, q[0], q[1] - 8);
   });
   for (const j of SK.junc) { const q = toScr(j); c.beginPath(); c.arc(q[0], q[1], 7, 0, 7); c.strokeStyle = '#000'; c.lineWidth = 3; c.stroke(); c.strokeStyle = '#facc15'; c.lineWidth = 2; c.stroke(); }
+  if (SK.tool === 'north' && SK.northA) {
+    const a = toScr(SK.northA), b = SK.mouse ? toScr(SK.mouse) : a;
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.strokeStyle = '#1F5E5B'; c.lineWidth = 3; c.stroke();
+    c.beginPath(); c.arc(a[0], a[1], 5, 0, 7); c.fillStyle = '#1F5E5B'; c.fill();
+    c.font = '600 13px Barlow, system-ui'; c.textAlign = 'left'; c.fillStyle = '#1F5E5B'; c.fillText('klik ujung panah utara', b[0] + 10, b[1]);
+  }
   if (SK.cur) {
     const pts = SK.cur.pts.concat(SK.mouse ? [SK.mouse] : []);
     line(pts, '#f59e0b', 3, false, [6, 4]); dots(SK.cur.pts, '#f59e0b', 4);
@@ -632,6 +638,10 @@ function delVertex(h) {
 function skClick(x, y) {
   if (!S.img) return;
   let p = toImg(x, y);
+  if (SK.tool === 'north') {
+    if (!SK.northA) { SK.northA = p; skDraw(); return; }
+    const a = SK.northA; SK.northA = null; pilihAlat('road'); selesaiPanahUtara(a, p); return;
+  }
   if (SK.tool === 'road' || SK.tool === 'parcel' || SK.tool === 'parcel2') {
     if (!SK.cur || SK.cur.type !== SK.tool) SK.cur = { type: SK.tool, pts: [] };
     const pts = SK.cur.pts;
@@ -641,6 +651,14 @@ function skClick(x, y) {
   } else if (SK.tool === 'cp') {
     S.cps.push({ img: p, ll: null }); LOG.info('Titik ikat #' + S.cps.length + ' ditambahkan di sketsa', p.map(v => +v.toFixed(1))); onSketchChanged();
   }
+}
+function pilihAlat(t) {
+  if (SK.cur) skFinish();
+  SK.tool = t; SK.northA = null;
+  document.querySelectorAll('#skTools [data-tool]').forEach(x => x.classList.toggle('on', x.dataset.tool === t));
+  if (SK.cv) SK.cv.style.cursor = t === 'pan' ? 'grab' : t === 'edit' ? 'pointer' : 'crosshair';
+  if (t === 'north') toast('Klik pangkal panah utara pada gambar, lalu klik ujungnya.');
+  skDraw();
 }
 function skFinish() {
   if (!SK.cur) return;
@@ -704,13 +722,14 @@ function loadImageFile(file) {
   fr.onload = () => setImage(fr.result, file.name || 'tempelan.png');
   fr.readAsDataURL(file);
 }
-function setImage(dataURL, name, keep) {
+function setImage(dataURL, name, keep, fromRot) {
   const im = new Image();
   im.onload = () => {
     imgEl = im; S.img = { dataURL, w: im.naturalWidth, h: im.naturalHeight, name };
+    if (!fromRot) rotAsli(dataURL, im.naturalWidth, im.naturalHeight);
     if (!keep) { S.roads = []; S.parcel = null; S.cps = []; S.cands = []; S.sel = -1; S.T = null; CTX = null; SK.cur = null; }
-    SK.fitted = false; skResize(); skFit(); onSketchChanged(); if (!keep) resetRiwayat();
-    LOG.info('Gambar dimuat', { name, w: im.naturalWidth, h: im.naturalHeight, kb: Math.round(dataURL.length * 0.75 / 1024) });
+    SK.fitted = false; skResize(); skFit(); onSketchChanged(); if (!keep || fromRot) resetRiwayat();
+    if (!fromRot) LOG.info('Gambar dimuat', { name, w: im.naturalWidth, h: im.naturalHeight, kb: Math.round(dataURL.length * 0.75 / 1024) });
   };
   im.onerror = () => { LOG.error('Gambar tidak bisa dibuka (format tidak didukung?)', { name }); toast('Gambar tidak bisa dibuka.', 'err'); };
   im.src = dataURL;
@@ -765,11 +784,7 @@ function initSketch() {
     else if (e.key === ' ') { SK.space = true; e.preventDefault(); }
   });
   document.addEventListener('keyup', e => { if (e.key === ' ') SK.space = false; });
-  document.querySelectorAll('#skTools [data-tool]').forEach(b => b.onclick = () => {
-    if (SK.cur) skFinish();
-    SK.tool = b.dataset.tool; document.querySelectorAll('#skTools [data-tool]').forEach(x => x.classList.toggle('on', x === b));
-    SK.cv.style.cursor = SK.tool === 'pan' ? 'grab' : SK.tool === 'edit' ? 'pointer' : 'crosshair';
-  });
+  document.querySelectorAll('#skTools [data-tool]').forEach(b => b.onclick = () => pilihAlat(b.dataset.tool));
   SK.cv.style.cursor = 'crosshair';
   $('skFinish').onclick = skFinish; $('skUndo').onclick = urungkan; $('skFit').onclick = skFit;
   $('skClear').onclick = () => {
@@ -801,11 +816,11 @@ function renderReady() {
     ok(S.roads.length > 0, `Jalan di sketsa: ${S.roads.length} (simpang ${SK.junc.length})`),
     ok(!!S.parcel, 'Bidang tanah digambar'),
     ok(!!L0, L0 ? 'Luas tanah: ' + fmt(L0, 0) + ' m²' : 'Luas tanah (m²) belum diisi di langkah 2'),
-    ($('inNorth').checked ? `<li class="qc-ok">Arah utara: ${esc($('inNorthDeg').value)}°</li>` : '<li class="qc-info">Arah utara tidak diketahui, putaran dicari bebas</li>')
+    ({ yakin: '<li class="qc-ok">Utara = atas gambar, yakin (±15°)</li>', kira: '<li class="qc-ok">Utara = atas gambar, kira-kira (±45°)</li>' }[$('inNorthMode').value] || '<li class="qc-info">Arah utara tidak dipakai, putaran dicari bebas</li>')
   ];
   let warn = '';
   if (S.roads.length && !SK.junc.length) warn = '<li class="qc-warn">Sketsa tanpa simpang: hasil bisa sangat ambigu. Isi nama jalan, arah utara, atau gunakan titik ikat.';
-  else if (SK.junc.length === 1 && !$('inNorth').checked) warn = '<li class="qc-warn">Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
+  else if (SK.junc.length === 1 && $('inNorthMode').value === 'bebas') warn = '<li class="qc-warn">Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
   $('readyInfo').innerHTML = '<ul class="qc">' + items.join('') + (warn ? warn + '</li>' : '') + '</ul>';
 }
 function buildCtx(s0) {
@@ -840,9 +855,9 @@ const runMatch = safe('Pencocokan', async () => {
   if (!s0) { go(2); setTimeout(() => $('inLuas').focus(), 100); throw new Error('Isi luas tanah (m²) sesuai buku tanah / surat ukur di langkah 2.'); }
   const v = Math.min(0.6, Math.max(0.02, (+$('inScaleVar').value || 20) / 100));
   const scales = [1 - v / 2, 1, 1 + v / 2].map(k => k * s0);
-  const north = $('inNorth').checked, th0 = north ? CORE.normAng((+$('inNorthDeg').value || 0) * DEG) : null;
-  const opt = { scales, th0, thTol: 30 * DEG, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol: 30 * DEG } };
-  LOG.info('Mulai pencocokan', { s0, scales, utara: north ? +$('inNorthDeg').value : null, tau: +$('inTau').value, jalanSketsa: S.roads.length, simpangSketsa: SK.junc.length });
+  const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = (nm === 'yakin' ? 15 : 45) * DEG;
+  const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
+  LOG.info('Mulai pencocokan', { s0, scales, utara: nm, putarGambar: ROT.deg, tau: +$('inTau').value, jalanSketsa: S.roads.length, simpangSketsa: SK.junc.length });
   $('btnMatch').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
   await sleep(30);
   const t0 = performance.now();
@@ -872,7 +887,7 @@ function renderCands() {
     const [t, cl] = conf(i);
     const d = document.createElement('div'); d.className = 'item kand' + (i === S.sel ? ' sel' : '');
     d.innerHTML = `<canvas data-ci="${i}" aria-hidden="true"></canvas><div><b>${esc(c.label)}</b> skor <b>${c.r ? (c.r.score * 100).toFixed(0) + '%' : '-'}</b> <span class="badge ${cl}">${t}</span>
-      <div class="hint">${c.r ? `jalan menempel ${(c.r.within * 100).toFixed(0)}%, deviasi rata-rata ${fmt(c.r.dev, 1)} m, ` : ''}rotasi ${fmt(c.T.th / DEG, 1)}°, skala ${fmt(c.T.s, 3)} m/px${c.r && c.r.ovl > 0.02 ? `, <b>menumpuk ${(c.r.ovl * 100).toFixed(0)}%</b> dengan bidang lain` : ''}${c.rms != null ? ', RMS titik ikat ' + fmt(c.rms, 2) + ' m' : ''}</div></div>`;
+      <div class="hint">${c.r ? `jalan menempel ${(c.r.within * 100).toFixed(0)}%, deviasi rata-rata ${fmt(c.r.dev, 1)} m, ` : ''}putar ${fmt(CORE.normAng(c.T.th) / DEG, 1)}° dari atas gambar, skala ${fmt(c.T.s, 3)} m/px${c.r && c.r.ovl > 0.02 ? `, <b>menumpuk ${(c.r.ovl * 100).toFixed(0)}%</b> dengan bidang lain` : ''}${c.rms != null ? ', RMS titik ikat ' + fmt(c.rms, 2) + ' m' : ''}</div></div>`;
     d.onclick = () => selectCand(i, true);
     el.appendChild(d);
   });
@@ -882,7 +897,7 @@ function renderCands() {
   requestAnimationFrame(gambarPratinjau);
 }
 function parcelWorld(T, force) {
-  let pts = S.parcel.map(p => CORE.fwdT(T, p[0], -p[1]));
+  let pts = terapkanAdj(S.parcel.map(p => CORE.fwdT(T, p[0], -p[1])));
   const L0 = getLuas();
   if (force && L0) {
     const A = CORE.polyArea(pts), c = CORE.centroid(pts), k = Math.sqrt(L0 / A);
@@ -902,7 +917,7 @@ function drawCands() {
   });
 }
 function selectCand(i, fly) {
-  S.sel = i; S.T = { ...S.cands[i].T };
+  S.sel = i; S.T = { ...S.cands[i].T }; S.adj = { dx: 0, dy: 0, dth: 0 };
   renderCands(); drawCands(); renderResult();
   if (fly && map) { const ll = toLL(parcelWorld(S.T, false)); map.fitBounds(L.latLngBounds(ll).pad(4), { maxZoom: 19 }); }
   LOG.info('Kandidat dipilih: ' + S.cands[i].label, { T: S.T }); markDone();
@@ -973,7 +988,7 @@ function renderResult() {
   const cl = S.sel >= 0 ? conf(S.sel) : ['-', ''];
   $('resInfo').innerHTML = `<b>${esc(S.sel >= 0 ? S.cands[S.sel].label : '-')}</b> <span class="badge ${cl[1]}">${cl[0]}</span><br>
     ${r ? `Skor kecocokan: <b>${(r.score * 100).toFixed(1)}%</b> · titik jalan sketsa yang menempel jalan OSM: ${(r.within * 100).toFixed(0)}% · deviasi rata²: ${fmt(r.dev, 1)} m · jalan OSM di area sketsa yang tak tergambar: ${((r.rev) * 100).toFixed(0)}%<br>` : ''}
-    Rotasi: ${fmt(S.T.th / DEG, 1)}° · Skala: ${fmt(S.T.s, 4)} m/px<br>
+    Putaran dari atas gambar: ${fmt(CORE.normAng(S.T.th) / DEG, 1)}° · Skala: ${fmt(S.T.s, 4)} m/px${S.adj.dx || S.adj.dy || S.adj.dth ? `<br>Bidang digeser sendiri: ${fmt(Math.hypot(S.adj.dx, S.adj.dy), 1)} m, diputar ${fmt(S.adj.dth / DEG, 1)}°` : ''}<br>
     Titik pusat: ${c[0].toFixed(7)}, ${c[1].toFixed(7)}<br>
     <table style="margin-top:6px"><tr><th style="text-align:left">Luas</th><th>m²</th></tr>
     <tr><td style="text-align:left">Luas diisi (BT/SU)</td><td>${L0 ? fmt(L0, 0) : '-'}</td></tr>
@@ -993,8 +1008,14 @@ function adjust(kind) {
   const c = CORE.centroid(parcelWorld(S.T, false));
   const rot = d => { const cs = Math.cos(d), sn = Math.sin(d), x = S.T.tx - c[0], y = S.T.ty - c[1]; S.T.tx = c[0] + cs * x - sn * y; S.T.ty = c[1] + sn * x + cs * y; S.T.th = CORE.normAng(S.T.th + d); };
   const scl = k => { S.T.s *= k; S.T.tx = c[0] + (S.T.tx - c[0]) * k; S.T.ty = c[1] + (S.T.ty - c[1]) * k; };
-  ({ n: () => S.T.ty += st, s: () => S.T.ty -= st, e: () => S.T.tx += st, w: () => S.T.tx -= st, rl: () => rot(rs), rr: () => rot(-rs), sp: () => scl(1.01), sm: () => scl(1 / 1.01) })[kind]();
-  if (S.sel >= 0) { S.cands[S.sel].T = { ...S.T }; if (!S.cands[S.sel].label.includes('disesuaikan')) S.cands[S.sel].label += ' (disesuaikan)'; }
+  if ($('inAdjMode').value === 'bidang') {
+    const a = S.adj;
+    ({ n: () => a.dy += st, s: () => a.dy -= st, e: () => a.dx += st, w: () => a.dx -= st, rl: () => a.dth += rs, rr: () => a.dth -= rs, sp: () => scl(1.01), sm: () => scl(1 / 1.01) })[kind]();
+  } else {
+    ({ n: () => S.T.ty += st, s: () => S.T.ty -= st, e: () => S.T.tx += st, w: () => S.T.tx -= st, rl: () => rot(rs), rr: () => rot(-rs), sp: () => scl(1.01), sm: () => scl(1 / 1.01) })[kind]();
+    if (S.sel >= 0) S.cands[S.sel].T = { ...S.T };
+  }
+  tandaiDisesuaikan();
   renderResult(); drawCands();
 }
 
@@ -1022,8 +1043,8 @@ function needResult() { if (!S.T || !S.parcel || !PROJ) throw new Error('Belum a
 const saveProj = safe('Simpan proyek', async () => {
   const o = {
     app: 'pencocok-situasi-bidang', version: APP_VERSION, saved: new Date().toISOString(),
-    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, north: $('inNorth').checked, northDeg: $('inNorthDeg').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
-    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms })), sel: S.sel, T: S.T
+    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
+    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, adj: S.adj, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms })), sel: S.sel, T: S.T
   };
   download(new Blob([JSON.stringify(o)], { type: 'application/json' }), baseName() + '_proyek.json');
 });
@@ -1032,9 +1053,9 @@ const loadProj = safe('Muat proyek', async file => {
   if (o.app !== 'pencocok-situasi-bidang') throw new Error('Bukan file proyek aplikasi ini.');
   const I = o.input || {};
   if (I.kec != null) { $('inKec').value = I.kec; isiKelurahan(); if (I.kel != null) $('inKel').value = I.kel; }
-  for (const [k, id] of [['luas', 'inLuas'], ['northDeg', 'inNorthDeg'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
-  $('inNorth').checked = !!I.north; $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
-  S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.extra = o.extra || []; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
+  for (const [k, id] of [['luas', 'inLuas'], ['northMode', 'inNorthMode'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
+  $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
+  S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.extra = o.extra || []; S.adj = o.adj || { dx: 0, dy: 0, dth: 0 }; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
   if (S.wil) { drawWilayah(); setProj(); $('btnJalan').disabled = false; }
   if (S.osm) { drawOSM(); $('jalanInfo').textContent = `${S.osm.ways.length} ruas jalan (dari proyek).`; }
   if (o.img) setImage(o.img.dataURL, o.img.name, true);
@@ -1082,6 +1103,10 @@ function init() {
   $('menu').querySelectorAll('.menu-isi .btn').forEach(b => b.addEventListener('click', () => setTimeout(() => $('menu').classList.remove('buka'), 50)));
   $('kopToggle').onclick = () => { const k = $('kop'); k.classList.toggle('kecil'); $('kopToggle').textContent = k.classList.contains('kecil') ? 'buka' : 'ciutkan'; };
   $('btnDXF').onclick = ekspDXF;
+  document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
+  $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
+  $('btnSejajar').onclick = sejajarkanJalan;
+  $('btnAdjReset').onclick = () => { S.adj = { dx: 0, dy: 0, dth: 0 }; renderResult(); drawCands(); LOG.info('Geser bidang saja direset'); };
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);
   $('inOv').onchange = aturOverlay; $('inOvOpa').oninput = aturOverlay;
   document.addEventListener('keydown', e => {
