@@ -82,6 +82,7 @@ details summary{cursor:pointer;color:#cbd5e1;margin:10px 0 4px}
     <button data-step="4">4. Hasil & Ekspor</button>
   </div>
   <div class="sp"></div>
+  <button id="btnNew" class="pri" title="Mulai bidang berikutnya: gambar & isian dikosongkan, wilayah & data jalan tetap">🆕 Bidang baru</button>
   <button id="btnSave" title="Simpan seluruh pekerjaan ke file .json">💾 Simpan proyek</button>
   <label class="btn" style="margin:0;color:var(--tx);font-size:14px">📂 Muat proyek<input type="file" id="fileProj" accept=".json" hidden></label>
   <button id="btnLog">🧾 Log <span class="badge" id="logBadge">0</span></button>
@@ -92,19 +93,23 @@ details summary{cursor:pointer;color:#cbd5e1;margin:10px 0 4px}
   <!-- STEP 1 -->
   <div class="panel show" data-panel="1">
     <h2>1. Tentukan wilayah</h2>
-    <label>Kota / Kabupaten</label><input type="text" id="inKota" placeholder="mis. Samarinda">
-    <label>Kecamatan</label><input type="text" id="inKec" placeholder="mis. Sungai Pinang">
-    <label>Kelurahan / Desa</label><input type="text" id="inKel" placeholder="mis. Temindung Permai">
-    <div class="row" style="margin-top:8px"><button class="pri" id="btnCari">🔎 Cari wilayah</button></div>
-    <div class="list" id="wilList"></div>
-    <details><summary>Wilayah tidak ketemu? Pakai area manual</summary>
-      <div class="hint">Geser peta ke kelurahan yang dimaksud, lalu pakai titik tengah peta sebagai pusat.</div>
+    <label>Kota</label><input type="text" id="inKota" value="Samarinda" readonly>
+    <label>Kecamatan</label><select id="inKec"></select>
+    <label>Kelurahan</label><select id="inKel"></select>
+    <div class="card hint" id="dataInfo">Memuat data Samarinda…</div>
+    <details><summary>Batas wilayah tidak tepat / tidak ada? Cari lewat internet</summary>
+      <div class="hint">Mencari batas kelurahan terpilih di OpenStreetMap (Nominatim).</div>
+      <div class="row" style="margin-top:6px"><button id="btnCari">🔎 Cari wilayah via internet</button></div>
+      <div class="list" id="wilList"></div>
+    </details>
+    <details><summary>Pakai area manual (lingkaran di tengah peta)</summary>
+      <div class="hint">Geser peta ke lokasi yang dimaksud, lalu pakai titik tengah peta sebagai pusat.</div>
       <div class="row"><div><label>Radius (m)</label><input type="number" id="inRad" value="1500" min="200" max="6000"></div>
       <button class="nf" id="btnManualArea" style="margin-top:18px">Pakai tengah peta</button></div>
     </details>
     <h3>Data jalan</h3>
     <label><input type="checkbox" id="inFoot" checked> Sertakan gang/jalan setapak (footway, path, track)</label>
-    <button class="pri" id="btnJalan" disabled>⬇️ Ambil data jalan (OpenStreetMap)</button>
+    <button id="btnJalan" disabled title="Biasanya tidak perlu: data jalan Samarinda sudah tersimpan">⬇️ Ambil ulang dari internet (opsional)</button>
     <div class="card hint" id="jalanInfo">Belum ada data jalan.</div>
     <details><summary>Server sibuk terus? Impor file data jalan</summary>
       <div class="hint">Buka <b>openstreetmap.org</b> → geser ke kelurahan → tombol <b>Ekspor</b> → <b>Ekspor</b> (unduh file <i>map.osm</i>). Atau dari overpass-turbo.eu (Ekspor → GeoJSON/raw). Lalu pilih filenya di sini:</div>

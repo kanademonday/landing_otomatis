@@ -13,14 +13,20 @@ async def main():
     async def route(r):
       u=r.request.url
       if 'leaflet' in u and u.endswith('.js'): await r.fulfill(body=MOCK,content_type='application/javascript')
+      elif '/data/samarinda_' in u:
+        f=D+'data/'+u.split('/data/')[1]
+        if os.path.exists(f): await r.fulfill(body=open(f).read(),content_type='application/json')
+        else: await r.fulfill(status=404,body='')
       elif 'nominatim' in u: await r.fulfill(body=open(D+'nominatim.json').read(),content_type='application/json')
       elif 'overpass' in u: await r.fulfill(body=open(D+'overpass.json').read(),content_type='application/json')
       else: await r.fulfill(status=404,body='')
     await pg.route('**/*',lambda r: route(r) if not r.request.url.startswith('file:') else r.continue_())
     await pg.goto('file://'+os.path.abspath(os.path.dirname(os.path.abspath(__file__))+'/../../index.html'))
-    await pg.fill('#inKota','Kota Uji');await pg.fill('#inKec','Kec Uji');await pg.fill('#inKel','Contoh')
-    await pg.click('#btnCari');await pg.wait_for_function("!document.getElementById('btnJalan').disabled",timeout=20000)
-    await pg.click('#btnJalan');await pg.wait_for_function("S.osm!==null",timeout=20000)
+    await pg.wait_for_function("SMD.status.jalan!=='memuat'",timeout=20000)
+    print('data:',await pg.inner_text('#dataInfo'))
+    await pg.select_option('#inKec','Sungai Pinang');await pg.select_option('#inKel','Temindung Permai')
+    await pg.wait_for_function("S.osm!==null",timeout=20000)
+    print('wil:',await pg.evaluate("S.wil.name"))
     print('jalan:',await pg.inner_text('#jalanInfo'))
     await pg.click('[data-step="2"]');await pg.set_input_files('#fileImg',D+'sketch.png');await pg.wait_for_function("S.img!==null")
     await pg.wait_for_timeout(300)
@@ -51,6 +57,8 @@ async def main():
     for bid in ['#btnKML','#btnCSV','#btnGeo','#btnPNG','#btnSave']:
       async with pg.expect_download() as dl: await pg.click(bid)
       d=await dl.value; await d.save_as(D+'out_'+d.suggested_filename); print('dl',d.suggested_filename)
+    await pg.click('#btnNew');await pg.wait_for_timeout(200)
+    print('bidang baru -> img',await pg.evaluate("S.img"),'roads',await pg.evaluate("S.roads.length"),'osm tetap',await pg.evaluate("!!S.osm"),'step',await pg.evaluate("STEP"))
     await pg.click('#btnLog')
     async with pg.expect_download() as dl: await pg.click('#logDl')
     d=await dl.value; await d.save_as(D+'log.txt')

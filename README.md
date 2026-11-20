@@ -17,10 +17,15 @@ Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya pa
 ## Cara pakai
 
 1. Unduh `index.html`, lalu buka dengan Chrome atau Edge (perlu internet).
-2. **Lokasi**: isi kota/kecamatan/kelurahan → *Cari wilayah* → *Ambil data jalan*.
+2. **Lokasi**: pilih kecamatan → kelurahan (Kota Samarinda). Batas & jalan langsung terpasang dari data tersimpan.
 3. **Sketsa**: muat gambar → telusuri jalan (alat 🛣️ Jalan) → gambar bidang (alat ⬛ Bidang) → isi luas. Arah utara & nama jalan (opsional) sangat membantu.
 4. **Pencocokan**: jalankan otomatis, pilih kandidat terbaik. Bila meleset, pakai **titik ikat** (≥2 titik di sketsa + klik titik yang sama di peta).
 5. **Hasil**: lihat perbandingan sketsa vs jalan sebenarnya, luas (geodesik/UTM/TM-3), koordinat titik sudut, penyesuaian halus, lalu ekspor **KML/KMZ**, GeoJSON, CSV, PNG.
+
+### Data Samarinda tersimpan
+`data/samarinda_wilayah.json` (batas 10 kecamatan & 59 kelurahan) dan `data/samarinda_jalan.json` (seluruh jalan) dibuat oleh GitHub Actions (`.github/workflows/data-samarinda.yml` → `tools/fetch_samarinda.py`) dari OpenStreetMap, diperbarui tiap bulan. Untuk memperbarui sekarang: tab **Actions** → *Perbarui data Samarinda (OSM)* → **Run workflow**. Kelengkapan batas kelurahan dicatat di `data/LAPORAN.txt`.
+
+Untuk banyak bidang: setelah selesai satu bidang, klik **🆕 Bidang baru** — wilayah dan data jalan tetap terpasang.
 
 ### Bila data jalan gagal dimuat
 Aplikasi otomatis mencoba beberapa server Overpass, lalu API utama OpenStreetMap, lalu mengulang. Bila tetap gagal, impor file sendiri: openstreetmap.org → **Ekspor** → unduh `map.osm` → pilih di *Impor file data jalan*.
@@ -36,6 +41,8 @@ Tombol **🧾 Log** → **Unduh log (.txt)**. Berisi versi, browser, ringkasan i
 | `src/core.js` | Algoritma: proyeksi, distance field (EDT), deteksi simpang, hipotesis, skor, penghalusan, UTM/TM-3 |
 | `src/app.js` | Antarmuka, peta (Leaflet), kanvas sketsa, ekspor, log |
 | `src/shell.html` | Kerangka HTML + CSS |
+| `tools/fetch_samarinda.py` | Pengunduh data Samarinda (dijalankan GitHub Actions) |
+| `data/` | Data batas & jalan Samarinda (dibuat otomatis) |
 | `build.py` | Menggabungkan `src/` → `index.html` |
 | `tests/` | Uji algoritma & uji end-to-end (Playwright) dengan data sintetis |
 
@@ -44,7 +51,7 @@ Tombol **🧾 Log** → **Unduh log (.txt)**. Berisi versi, browser, ringkasan i
 ```bash
 python3 build.py                 # build index.html
 node tests/test_core.js          # uji algoritma
-node tests/e2e/gen.js && python3 tests/e2e/prepare.py
+node tests/e2e/gen.js && python3 tests/e2e/prepare.py && python3 tests/test_fetch.py
 python3 tests/e2e/run.py         # uji alur penuh (butuh playwright + chrome)
 python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
 ```

@@ -5,3 +5,4 @@ tests/e2e/out_*
 tests/e2e/log.txt
 __pycache__/
 node_modules/
+tests/e2e/data/

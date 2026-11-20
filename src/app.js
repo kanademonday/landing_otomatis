@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.1.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -159,11 +159,135 @@ function markDone() {
   document.querySelectorAll('#steps button').forEach(b => b.classList.toggle('done', d[b.dataset.step]));
 }
 
+/* ---------- DATA SAMARINDA (offline) ---------- */
+const SAMARINDA = [
+  ['Loa Janan Ilir', ['Simpang Tiga', 'Tani Aman', 'Sengkotek', 'Harapan Baru', 'Rapak Dalam']],
+  ['Palaran', ['Rawa Makmur', 'Handil Bakti', 'Bukuan', 'Simpang Pasir', 'Bantuas']],
+  ['Samarinda Ilir', ['Selili', 'Sidodamai', 'Sidomulyo', 'Sungai Dama', 'Pelita']],
+  ['Samarinda Kota', ['Karang Mumus', 'Pelabuhan', 'Pasar Pagi', 'Bugis', 'Sungai Pinang Luar']],
+  ['Samarinda Seberang', ['Sungai Keledang', 'Baqa', 'Mesjid', 'Mangkupalas', 'Tenun Samarinda', 'Gunung Panjang']],
+  ['Samarinda Ulu', ['Teluk Lerong Ilir', 'Jawa', 'Air Putih', 'Sidodadi', 'Air Hitam', 'Dadi Mulya', 'Gunung Kelua', 'Bukit Pinang']],
+  ['Samarinda Utara', ['Sempaja Selatan', 'Lempake', 'Sungai Siring', 'Sempaja Utara', 'Tanah Merah', 'Sempaja Barat', 'Sempaja Timur', 'Budaya Pampang']],
+  ['Sambutan', ['Sungai Kapih', 'Sambutan', 'Makroman', 'Sindang Sari', 'Pulau Atas']],
+  ['Sungai Kunjang', ['Loa Bakung', 'Loa Buah', 'Karang Asam Ulu', 'Lok Bahu', 'Teluk Lerong Ulu', 'Karang Asam Ilir', 'Karang Anyar']],
+  ['Sungai Pinang', ['Temindung Permai', 'Sungai Pinang Dalam', 'Gunung Lingai', 'Mugirejo', 'Bandara']]
+];
+const DATA_URLS = ['data/', 'https://kanademonday.github.io/landing_otomatis/data/', 'https://raw.githubusercontent.com/kanademonday/landing_otomatis/main/data/'];
+const SMD = { wil: null, jalan: null, status: { wil: 'memuat', jalan: 'memuat' }, pending: false };
+function kelLabel() { const k = $('inKel').value; return !k || k === '*' ? 'Kec. ' + $('inKec').value : k; }
+async function muatData(file, label) {
+  for (const base of DATA_URLS) {
+    if (!/^https?:/.test(base) && location.protocol === 'file:') continue; // file:// tidak bisa membaca file lokal lain
+    try { return await fetchJSON(base + file, {}, label, 180000); }
+    catch (e) { LOG.warn(`${label}: tidak tersedia di ${base}`); }
+  }
+  return null;
+}
+function decodeJalan(J) {
+  const n = J.n.length / 2, lat = new Float64Array(n), lon = new Float64Array(n);
+  let a = 0, b = 0;
+  for (let i = 0; i < n; i++) { a += J.n[2 * i]; b += J.n[2 * i + 1]; lat[i] = a / 1e6; lon[i] = b / 1e6; }
+  const ways = J.w.map(w => {
+    const nodes = w.slice(2); let s = 90, nn = -90, we = 180, e = -180;
+    for (const i of nodes) { s = Math.min(s, lat[i]); nn = Math.max(nn, lat[i]); we = Math.min(we, lon[i]); e = Math.max(e, lon[i]); }
+    return { hw: J.hw[w[0]], name: w[1] >= 0 ? J.names[w[1]] : '', nodes, bb: [s, nn, we, e] };
+  });
+  return { lat, lon, ways, dibuat: J.dibuat };
+}
+function subsetJalan(bb) {
+  const D = SMD.jalan, ex = hwExcl(), nodes = {}, ways = [];
+  D.ways.forEach((w, k) => {
+    if (w.bb[1] < bb.s || w.bb[0] > bb.n || w.bb[3] < bb.w || w.bb[2] > bb.e || ex.test(w.hw)) return;
+    ways.push({ id: k + 1, hw: w.hw, name: w.name, nodes: w.nodes.map(i => i + 1) });
+    for (const i of w.nodes) nodes[i + 1] = [D.lat[i], D.lon[i]];
+  });
+  return { nodes, ways, src: 'data Samarinda tersimpan (OSM ' + (D.dibuat || '') + ')' };
+}
+function renderDataInfo() {
+  const st = SMD.status, nKel = SMD.wil ? SMD.wil.kecamatan.reduce((a, k) => a + k.kelurahan.filter(l => l.rings).length, 0) : 0;
+  const f = s => s === 'siap' ? '✅' : s === 'memuat' ? '⏳' : '⚠️';
+  $('dataInfo').innerHTML = `${f(st.wil)} Batas wilayah: ${st.wil === 'siap' ? nKel + '/59 kelurahan' : st.wil}<br>` +
+    `${f(st.jalan)} Jalan seluruh Samarinda: ${st.jalan === 'siap' ? SMD.jalan.ways.length.toLocaleString('id') + ' ruas' : st.jalan}` +
+    (SMD.jalan && SMD.jalan.dibuat ? `<br><span class="hint">Data OSM per ${esc(SMD.jalan.dibuat)}</span>` : '') +
+    (st.jalan === 'tidak tersedia' ? '<br><span class="hint">Data tersimpan belum ada — pilih kelurahan lalu klik "Ambil ulang dari internet".</span>' : '');
+}
+async function initDataSamarinda() {
+  renderDataInfo();
+  const W = await muatData('samarinda_wilayah.json', 'Data batas Samarinda');
+  SMD.wil = W; SMD.status.wil = W ? 'siap' : 'tidak tersedia'; renderDataInfo();
+  if (W && !S.wil && $('inKel').value) pilihDariDaftar();
+  const J = await muatData('samarinda_jalan.json', 'Data jalan Samarinda');
+  if (J) {
+    try { const t0 = performance.now(); SMD.jalan = decodeJalan(J); LOG.info(`Data jalan Samarinda siap: ${SMD.jalan.ways.length} ruas (${Math.round(performance.now() - t0)} ms decode)`); SMD.status.jalan = 'siap'; }
+    catch (e) { LOG.error('Gagal membaca data jalan Samarinda', e); SMD.status.jalan = 'rusak'; }
+  } else SMD.status.jalan = 'tidak tersedia';
+  renderDataInfo();
+  if (SMD.jalan && S.wil && !S.osm) terapkanJalanOffline();
+}
+function isiKecamatan() {
+  $('inKec').innerHTML = '<option value="">— pilih kecamatan —</option>' + SAMARINDA.map(k => `<option>${esc(k[0])}</option>`).join('');
+}
+function isiKelurahan() {
+  const k = SAMARINDA.find(x => x[0] === $('inKec').value);
+  $('inKel').innerHTML = k ? `<option value="">— pilih kelurahan —</option>` + k[1].map(n => `<option>${esc(n)}</option>`).join('') + `<option value="*">(seluruh Kec. ${esc(k[0])})</option>` : '<option value="">— pilih kecamatan dulu —</option>';
+}
+function cariRingDaftar(kec, kel) {
+  if (!SMD.wil) return null;
+  const K = SMD.wil.kecamatan.find(x => x.nama === kec); if (!K) return null;
+  if (kel === '*') return K.rings ? { rings: K.rings, level: 'kecamatan' } : null;
+  const L0 = K.kelurahan.find(x => x.nama === kel);
+  if (L0 && L0.rings) return { rings: L0.rings, level: 'kelurahan' };
+  if (K.rings) return { rings: K.rings, level: 'kecamatan', fallback: true };
+  return null;
+}
+function terapkanJalanOffline() {
+  if (!SMD.jalan || !S.wil) return false;
+  const b = wilBBox(), lat = (b.s + b.n) / 2, dLa = 300 / 111000, dLo = 300 / (111000 * Math.cos(lat * DEG));
+  const t0 = performance.now();
+  const D = subsetJalan({ s: b.s - dLa, n: b.n + dLa, w: b.w - dLo, e: b.e + dLo });
+  LOG.info(`Subset jalan offline: ${D.ways.length} ruas (${Math.round(performance.now() - t0)} ms)`);
+  if (!D.ways.length) { LOG.warn('Tidak ada jalan tersimpan di wilayah ini'); return false; }
+  terimaJalan(D); return true;
+}
+const pilihDariDaftar = safe('Pilih kelurahan', async () => {
+  const kec = $('inKec').value, kel = $('inKel').value;
+  if (!kec || !kel) return;
+  const nama = (kel === '*' ? 'Kecamatan ' + kec : kel + ', ' + kec) + ', Samarinda';
+  const r = cariRingDaftar(kec, kel);
+  if (r) {
+    setWilayah({ name: nama, rings: r.rings, hasPoly: true });
+    if (r.fallback) { toast(`Batas Kelurahan ${kel} belum ada di data OSM — dipakai batas Kecamatan ${kec}. Bisa juga "Cari lewat internet".`, 'warn'); LOG.warn('Batas kelurahan tidak ada, pakai kecamatan', { kec, kel }); }
+    if (kel === '*' && /Palaran/.test(kec)) toast('Kecamatan Palaran sangat luas — pencocokan bisa lebih lambat.', 'warn');
+  } else {
+    LOG.info('Batas tidak tersedia di data tersimpan → cari via Nominatim', { kec, kel, dataWilayah: SMD.status.wil });
+    if (SMD.status.wil === 'memuat') { $('dataInfo').innerHTML += '<br>⏳ Menunggu data batas…'; return; }
+    await cariWilayah();
+    if (!S.wil) return;
+  }
+  if (!terapkanJalanOffline()) {
+    if (SMD.status.jalan === 'memuat') $('jalanInfo').textContent = '⏳ Data jalan Samarinda masih dimuat, akan dipakai otomatis…';
+    else $('jalanInfo').innerHTML = 'Data jalan tersimpan tidak tersedia. Klik <b>Ambil ulang dari internet</b>.';
+  }
+});
+function bidangBaru() {
+  if (SK.cur) SK.cur = null;
+  S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
+  for (const id of ['inLuas', 'inLebar', 'inNama', 'inRoadName']) $(id).value = '';
+  $('inNorth').checked = false; $('inNorthDeg').value = 0; $('fileImg').value = '';
+  if (map) { G.cand.clearLayers(); G.res.clearLayers(); G.cp.clearLayers(); }
+  $('candList').innerHTML = '<div class="hint">Belum ada.</div>'; $('prog').style.width = '0'; $('progTx').textContent = '';
+  $('resInfo').textContent = 'Pilih kandidat dulu di langkah 3.'; $('vtx').innerHTML = '';
+  onSketchChanged(); markDone();
+  LOG.info('=== Bidang baru (wilayah & data jalan dipertahankan) ===');
+  go(S.osm ? 2 : 1);
+  toast(S.osm ? 'Siap untuk bidang berikutnya. Muat gambar situasi baru.' : 'Bidang baru. Pilih kelurahan dulu.', 'ok');
+}
+
 /* ---------- LANGKAH 1: WILAYAH ---------- */
 function isPoly(x) { return x.geojson && /Polygon/.test(x.geojson.type); }
 const cariWilayah = safe('Pencarian wilayah', async () => {
-  const kota = $('inKota').value.trim(), kec = $('inKec').value.trim(), kel = $('inKel').value.trim();
-  if (!kel && !kec) throw new Error('Isi minimal Kelurahan/Desa atau Kecamatan.');
+  const kota = $('inKota').value.trim(), kec = $('inKec').value.trim(), kel = $('inKel').value === '*' ? '' : $('inKel').value.trim();
+  if (!kel && !kec) throw new Error('Pilih kecamatan dan kelurahan dulu.');
   const j = a => a.filter(Boolean).join(', ');
   const qs = [...new Set([j([kel, kec, kota]), j([kel, kota]), kel ? j(['Kelurahan ' + kel, kota]) : '', kel ? j(['Desa ' + kel, kec, kota]) : '', j([kel, kec]), j([kec, kota])].filter(s => s && s.includes(',') || s === kel))];
   $('wilList').innerHTML = '<div class="hint">Mencari…</div>';
@@ -930,7 +1054,7 @@ function cmpDraw() {
 /* ---------- EKSPOR ---------- */
 const xmlEsc = s => String(s).replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 function baseName() {
-  const n = ($('inNama').value.trim() || 'bidang') + '_' + ($('inKel').value.trim() || 'lokasi');
+  const n = ($('inNama').value.trim() || 'bidang') + '_' + kelLabel();
   return n.replace(/[^\w\-]+/g, '_').replace(/_+/g, '_').slice(0, 60);
 }
 function needResult() { if (!S.T || !S.parcel || !PROJ) throw new Error('Belum ada hasil. Jalankan pencocokan & pilih kandidat.'); }
@@ -940,7 +1064,7 @@ function buildKML(overlayHref) {
   const coords = ring.map(p => `${p[1].toFixed(8)},${p[0].toFixed(8)},0`).join(' ');
   const L0 = getLuas(), Ag = geoArea(ll), cand = S.sel >= 0 ? S.cands[S.sel] : null, r = cand && (cand.rNow || cand.r);
   const nama = $('inNama').value.trim() || 'Bidang Tanah';
-  const desc = `Kelurahan/Desa: ${$('inKel').value}\nKecamatan: ${$('inKec').value}\nKota/Kab: ${$('inKota').value}\nLuas input: ${L0 ? L0 + ' m²' : '-'}\nLuas poligon (geodesik): ${Ag.toFixed(1)} m²\n` +
+  const desc = `Kelurahan/Desa: ${kelLabel()}\nKecamatan: ${$('inKec').value}\nKota/Kab: ${$('inKota').value}\nLuas input: ${L0 ? L0 + ' m²' : '-'}\nLuas poligon (geodesik): ${Ag.toFixed(1)} m²\n` +
     `Metode: ${cand ? cand.label : '-'}${r ? `, skor kecocokan ${(r.score * 100).toFixed(1)}%, deviasi rata² ${r.dev.toFixed(1)} m` : ''}\n` +
     `Dibuat: ${new Date().toLocaleString('id-ID')} dengan Pencocok Situasi Bidang v${APP_VERSION}\nCATATAN: posisi hasil pencocokan sketsa, bukan hasil ukur. Verifikasi di lapangan/BPN.`;
   const roads = S.roads.map((rd, i) => {
@@ -956,7 +1080,7 @@ function buildKML(overlayHref) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
 <Document>
-<name>${xmlEsc(nama)} - ${xmlEsc($('inKel').value || '')}</name>
+<name>${xmlEsc(nama)} - ${xmlEsc(kelLabel())}</name>
 <Style id="bidang"><LineStyle><color>ff00ffff</color><width>3</width></LineStyle><PolyStyle><color>5900ffff</color></PolyStyle></Style>
 <Style id="jalan"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>
 <Style id="titik"><IconStyle><scale>0.6</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.8</scale></LabelStyle></Style>
@@ -1012,7 +1136,8 @@ const loadProj = safe('Muat proyek', async file => {
   const o = JSON.parse(await file.text());
   if (o.app !== 'pencocok-situasi-bidang') throw new Error('Bukan file proyek aplikasi ini.');
   const I = o.input || {};
-  for (const [k, id] of [['kota', 'inKota'], ['kec', 'inKec'], ['kel', 'inKel'], ['luas', 'inLuas'], ['lebar', 'inLebar'], ['northDeg', 'inNorthDeg'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
+  if (I.kec != null) { $('inKec').value = I.kec; isiKelurahan(); if (I.kel != null) $('inKel').value = I.kel; }
+  for (const [k, id] of [['luas', 'inLuas'], ['lebar', 'inLebar'], ['northDeg', 'inNorthDeg'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
   $('inNorth').checked = !!I.north; $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
   S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
   if (S.wil) { drawWilayah(); setProj(); $('btnJalan').disabled = false; }
@@ -1031,7 +1156,12 @@ function init() {
   initMap(); initSketch();
   document.querySelectorAll('#steps button').forEach(b => b.onclick = () => go(+b.dataset.step));
   $('btnCari').onclick = cariWilayah;
-  for (const id of ['inKota', 'inKec', 'inKel']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') cariWilayah(); });
+  isiKecamatan(); isiKelurahan();
+  $('inKec').onchange = () => { isiKelurahan(); LOG.info('Kecamatan dipilih: ' + $('inKec').value); };
+  $('inKel').onchange = () => pilihDariDaftar();
+  $('btnNew').onclick = bidangBaru;
+  $('inFoot').onchange = () => { if (S.wil && SMD.jalan) { S.cands = []; S.sel = -1; S.T = null; terapkanJalanOffline(); } };
+  initDataSamarinda();
   $('btnManualArea').onclick = safe('Area manual', async () => {
     if (!map) throw new Error('Peta tidak tersedia.');
     const c = map.getCenter(), r = +$('inRad').value || 1500;

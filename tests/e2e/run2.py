@@ -20,7 +20,10 @@ async def main():
         else: await r.fulfill(status=404,body='')
       await pg.route('**/*',lambda r: route(r) if not r.request.url.startswith('file:') else r.continue_())
       await pg.goto('file://'+os.path.abspath(os.path.dirname(os.path.abspath(__file__))+'/../../index.html'))
-      await pg.fill('#inKel','Contoh');await pg.click('#btnCari');await pg.wait_for_function("!document.getElementById('btnJalan').disabled",timeout=20000)
+      await pg.wait_for_function("SMD.status.jalan!=='memuat'",timeout=20000)
+      await pg.select_option('#inKec','Samarinda Ilir');await pg.select_option('#inKel','Selili')
+      await pg.wait_for_function("!document.getElementById('btnJalan').disabled",timeout=20000)
+      print('tanpa data tersimpan -> wilayah via Nominatim:',await pg.evaluate("S.wil.name"))
       if mode=='api':
         await pg.click('#btnJalan');await pg.wait_for_function("S.osm!==null",timeout=60000)
         print('API:',await pg.inner_text('#jalanInfo'),'| calls',calls['api'])
