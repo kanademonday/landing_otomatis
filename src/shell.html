@@ -3,14 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Plot Bidang KW 4–6 · Samarinda</title>
+<title>Plot Bidang dari Gambar Situasi, Samarinda</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Token: kertas peta kadaster, tinta petrol, garis bidang merah */
 :root{
@@ -54,7 +52,6 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn.dan{color:var(--merah);border-color:#E8BDB9}
 .btn.kecil{height:28px;padding:0 9px;font-size:13px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-.chip{font:600 12px/1 var(--fc);background:var(--teal2);color:var(--teal);padding:4px 7px;border-radius:999px}
 .menu{position:relative}
 .menu-isi{position:absolute;right:0;top:40px;background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);box-shadow:0 8px 24px rgba(24,48,46,.12);padding:6px;min-width:210px;z-index:1500;display:none}
 .menu.buka .menu-isi{display:block}
@@ -136,6 +133,19 @@ td:first-child,th:first-child{text-align:left}
 .legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin:0 5px 0 10px}
 .legend i:first-child{margin-left:0}
 
+/* ---------- isian bersatuan ---------- */
+.satuan{position:relative}
+.satuan input{padding-right:64px}
+.satuan span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--tinta2);font-weight:500;pointer-events:none}
+
+/* ---------- gambar di peta & pratinjau kandidat ---------- */
+.ovctl{position:absolute;top:12px;left:56px;z-index:900;background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);padding:6px 12px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(24,48,46,.08)}
+.ovctl label.cek{margin:0;font-weight:500}
+.ovctl input[type=range]{width:120px;accent-color:var(--teal)}
+.list .item.kand{display:grid;grid-template-columns:132px 1fr;column-gap:10px;align-items:start}
+.list .item.kand canvas{width:132px;height:96px;border-radius:4px;border:1px solid var(--garis2);display:block}
+.list .item.kand .hint{margin:2px 0 0}
+
 /* ---------- kop gambar (title block) ---------- */
 #kop{position:absolute;right:14px;bottom:14px;z-index:900;background:rgba(255,255,255,.97);border:1.5px solid var(--tinta);font-family:var(--fc);width:330px;box-shadow:3px 3px 0 rgba(24,48,46,.18)}
 #kop .judul{display:flex;align-items:baseline;gap:8px;padding:7px 10px;border-bottom:1.5px solid var(--tinta)}
@@ -150,24 +160,6 @@ td:first-child,th:first-child{text-align:left}
 #kop dd{margin:0;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
 #kop.kecil dl{display:none}
 #kop.kecil .judul{border-bottom:0}
-.st{display:inline-block;font:600 12px/1.3 var(--fc);padding:2px 8px;border-radius:999px}
-.st-belum{background:var(--garis2);color:var(--tinta2)}.st-ok{background:var(--hijau2);color:var(--hijau)}.st-ragu{background:var(--oranye2);color:var(--oranye)}.st-lap{background:var(--merah2);color:var(--merah)}.st-no{background:#E4E4E4;color:#555}
-
-/* ---------- laci daftar bidang ---------- */
-#laci{position:fixed;top:58px;left:0;bottom:0;width:min(880px,100%);background:var(--panel);border-right:1px solid var(--garis);z-index:1800;transform:translateX(-102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:12px 0 32px rgba(24,48,46,.14)}
-#laci.buka{transform:none}
-#laci .kepala{padding:16px 18px 10px;border-bottom:1px solid var(--garis2)}
-#laci .kepala .row{margin-top:10px}
-#laci .isi{flex:1;overflow:auto;padding:0 18px}
-#laci table{font-size:14px}
-#laci th{position:sticky;top:0;background:var(--panel);text-align:left;padding-top:10px}
-#laci td{text-align:left}
-#laci td.num,#laci th.num{text-align:right}
-#laci tr[data-i]{cursor:pointer}
-#laci tr[data-i]:hover td{background:var(--kertas)}
-#laci tr.aktif td{background:var(--teal2)}
-#laci td.kosong{text-align:center;color:var(--tinta3);padding:40px 10px;font-family:var(--f)}
-#laci .kaki{padding:10px 18px;border-top:1px solid var(--garis2);display:flex;gap:6px;flex-wrap:wrap}
 
 /* ---------- log & notifikasi ---------- */
 #log{position:fixed;left:0;right:0;bottom:0;height:0;background:var(--putih);border-top:1px solid var(--garis);z-index:2000;transition:height .2s;display:flex;flex-direction:column;overflow:hidden}
@@ -190,7 +182,7 @@ td:first-child,th:first-child{text-align:left}
 @media (max-width:820px){
   .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}.steps button{height:40px}
   #app{flex-direction:column;height:auto}aside{width:100%;min-width:0;border-right:0;border-bottom:1px solid var(--garis)}main{height:70vh}
-  #laci{top:0}#kop{width:270px}
+  #kop{width:270px}
 }
 </style>
 </head>
@@ -198,7 +190,7 @@ td:first-child,th:first-child{text-align:left}
 <header class="top">
   <div class="merk">
     <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path d="M4 9 15 4l11 6-3 14-12 2z" fill="#F7E4E2" stroke="#C2362F" stroke-width="2" stroke-linejoin="round"/><path d="M15 4 13 26" stroke="#C2362F" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="15" cy="4" r="2" fill="#18302E"/><circle cx="26" cy="10" r="2" fill="#18302E"/><circle cx="4" cy="9" r="2" fill="#18302E"/></svg>
-    <div><b>Plot Bidang</b><small>Samarinda, KW 4–6 <a id="verLink" href="https://github.com/kanademonday/landing_otomatis/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="Catatan perubahan"></a></small></div>
+    <div><b>Plot Bidang</b><small>Samarinda <a id="verLink" href="https://github.com/kanademonday/landing_otomatis/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="Catatan perubahan"></a></small></div>
   </div>
   <div class="lokasi">
     <input type="hidden" id="inKota" value="Samarinda">
@@ -213,7 +205,6 @@ td:first-child,th:first-child{text-align:left}
   </nav>
   <div class="sp"></div>
   <div class="aksi">
-    <button class="btn" id="btnDaftar" title="Daftar bidang yang sedang dikerjakan">Daftar bidang <span class="chip" id="btnDaftarN">0</span></button>
     <button class="btn pri" id="btnNew" title="Kosongkan gambar & isian, wilayah dan data jalan tetap">Bidang baru</button>
     <div class="menu" id="menu">
       <button class="btn" id="btnMenu" aria-haspopup="true" aria-label="Menu lainnya">⋯ <span class="badge" id="logBadge">0</span></button>
@@ -234,15 +225,6 @@ td:first-child,th:first-child{text-align:left}
     <div class="card hint" id="dataInfo">Memuat data Samarinda…</div>
     <div class="card hint" id="jalanInfo">Belum ada data jalan.</div>
     <label class="cek"><input type="checkbox" id="inFoot" checked> Ikutkan gang dan jalan setapak</label>
-
-    <section class="blok">
-      <h3>Bidang yang sudah diplot</h3>
-      <p class="hint">Bidang hasil digitasi AutoCAD (DXF), KML, atau GeoJSON dipakai sebagai acuan: bidang baru tidak boleh menumpuk di atasnya. File hanya dibaca di browser ini.</p>
-      <label for="inRefCrs">Sistem koordinat file DXF</label>
-      <select id="inRefCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
-      <div class="row" style="margin-top:8px"><label class="btn" style="margin:0">Impor bidang…<input type="file" id="fileRef" accept=".dxf,.kml,.geojson,.json" hidden></label><button class="btn nf dan" id="btnRefClear">Hapus</button></div>
-      <p class="hint" id="refInfo"></p>
-    </section>
 
     <section class="blok">
       <h3>Cadangan bila data tidak tersedia</h3>
@@ -269,13 +251,10 @@ td:first-child,th:first-child{text-align:left}
 
     <section class="blok">
       <h3>Data bidang</h3>
-      <div class="dua">
-        <div><label for="inLuas">Luas surat ukur (m²)</label><input type="number" id="inLuas" placeholder="menentukan skala"></div>
-        <div><label for="inLuasBT">Luas di daftar / buku tanah</label><input type="number" id="inLuasBT" placeholder="untuk pemeriksaan"></div>
-      </div>
+      <label for="inLuas">Luas tanah, dalam meter persegi (m²) <span style="color:var(--merah)">wajib</span></label>
+      <div class="satuan"><input type="number" id="inLuas" min="1" step="any" required placeholder="mis. 444"><span>m²</span></div>
+      <p class="hint">Isi sesuai buku tanah, surat ukur, atau spreadsheet. Luas menentukan skala gambar.</p>
       <div id="parcelInfo" class="card">Bidang belum digambar.</div>
-      <label for="inLebar">Tanpa luas? Perkiraan lebar gambar di lapangan (m)</label>
-      <input type="number" id="inLebar" placeholder="mis. 150">
       <label class="cek" style="margin-top:12px"><input type="checkbox" id="inNorth"> Ada panah utara pada gambar</label>
       <label for="inNorthDeg">Arah panah utara, derajat searah jarum jam dari atas gambar</label>
       <input type="number" id="inNorthDeg" value="0">
@@ -292,16 +271,10 @@ td:first-child,th:first-child{text-align:left}
     <section class="blok">
       <h3>Bidang lain pada gambar yang sama</h3>
       <label for="inExtraName">Label untuk bidang berikutnya</label>
-      <input type="text" id="inExtraName" placeholder="NIB atau nomor hak">
+      <input type="text" id="inExtraName" placeholder="mis. nomor bidang pada peta analog">
       <div id="extraList" class="list"></div>
     </section>
 
-    <details><summary>Bantuan AI untuk menelusuri gambar</summary>
-      <p class="hint">Memakai Claude API dengan API key Anda. Gambar dikirim ke server Anthropic, jadi jangan gunakan untuk dokumen dinas tanpa izin.</p>
-      <label for="inKey">API key Anthropic</label><input type="password" id="inKey" placeholder="sk-ant-…">
-      <label for="inModel">Model</label><input type="text" id="inModel" value="claude-sonnet-5-5">
-      <div class="row" style="margin-top:8px"><button class="btn" id="btnAI">Telusuri dengan AI</button><button class="btn" id="btnAIUndo" disabled>Batalkan hasil AI</button></div>
-    </details>
   </div>
 
   <!-- 3. COCOKKAN -->
@@ -346,31 +319,15 @@ td:first-child,th:first-child{text-align:left}
         <button class="btn" data-mv="w">Barat</button><button class="btn" data-mv="n">Utara</button><button class="btn" data-mv="s">Selatan</button><button class="btn" data-mv="e">Timur</button>
         <button class="btn" data-mv="rl">Putar ↺</button><button class="btn" data-mv="rr">Putar ↻</button><button class="btn" data-mv="sm">Kecil 1%</button><button class="btn" data-mv="sp">Besar 1%</button>
       </div>
-      <label class="cek" style="margin-top:12px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas surat ukur</label>
-    </section>
-    <section class="blok">
-      <h3>Simpan ke daftar bidang</h3>
-      <label for="inNama">Nama / NIB bidang</label><input type="text" id="inNama" placeholder="mis. NIB 16010203000123">
-      <div class="dua">
-        <div><label for="inStatus">Status</label><select id="inStatus"><option value="ditemukan">Ditemukan</option><option value="ragu">Ragu-ragu</option><option value="lapangan">Perlu cek lapangan</option><option value="tidak">Tidak ditemukan</option></select></div>
-        <div style="display:flex;align-items:flex-end"><button class="btn pri" id="btnSimpanDaftar" style="width:100%">Simpan hasil</button></div>
-      </div>
-      <label for="inCatatan">Catatan</label><textarea id="inCatatan" placeholder="mis. sisi utara di sketsa tidak sesuai citra"></textarea>
-      <button class="btn" id="btnLanjut" hidden style="width:100%;margin-top:8px">Kerjakan bidang berikutnya di daftar</button>
+      <label class="cek" style="margin-top:12px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas yang diisi</label>
     </section>
     <section class="blok">
       <h3>Ekspor</h3>
-      <label for="inCrs">Sistem koordinat untuk DXF dan tabel</label>
+      <label for="inNama">Nama bidang (dipakai di nama file dan label)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
+      <label for="inCrs">Sistem koordinat</label>
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
-      <div class="ekspor" style="margin-top:8px">
-        <button class="btn" id="btnDXF">DXF <small>AutoCAD</small></button>
-        <button class="btn" id="btnWorld">Gambar + world file <small>AutoCAD</small></button>
-        <button class="btn" id="btnKML">KML <small>Google Earth</small></button>
-        <button class="btn" id="btnKMZ">KMZ + gambar <small>Google Earth</small></button>
-        <button class="btn" id="btnCSV">Koordinat <small>CSV</small></button>
-        <button class="btn" id="btnGeo">GeoJSON <small>GIS</small></button>
-        <button class="btn" id="btnPNG">Perbandingan <small>PNG</small></button>
-      </div>
+      <button class="btn pri" id="btnDXF" style="width:100%;height:40px;margin-top:10px">Unduh DXF untuk AutoCAD</button>
+      <p class="hint">Berisi poligon bidang, nomor titik sudut, label luas, bidang lain, jalan dari gambar, dan bingkai posisi gambar. Buka di AutoCAD, lalu <i>Save As</i> bila perlu format DWG.</p>
     </section>
     <section class="blok">
       <h3>Koordinat titik sudut</h3>
@@ -389,44 +346,31 @@ td:first-child,th:first-child{text-align:left}
       <button data-tool="parcel"><i style="background:#a855f7"></i>Bidang</button>
       <button data-tool="parcel2"><i style="background:#c8641a"></i>Bidang lain</button>
       <button data-tool="cp"><i style="background:#facc15;border-radius:50%"></i>Titik ikat</button>
-      <button data-tool="edit">Ubah titik</button>
+      <button data-tool="edit" title="Seret titik untuk memindah, klik garis untuk menyisipkan titik, klik kanan titik untuk menghapus">Ubah titik</button>
       <span class="sep"></span>
       <button id="skFinish" title="Enter">Selesai</button>
-      <button id="skUndo" title="Backspace">Hapus titik</button>
+      <button id="skUndo" title="Ctrl+Z">Urungkan</button>
       <button id="skFit">Pas layar</button>
       <button id="skClear" style="color:var(--merah)">Hapus semua</button>
     </div>
     <div class="legend" id="skLegend" style="max-width:calc(100% - 380px)">Gulir untuk memperbesar. Seret dengan tombol tengah atau alat Geser.</div>
   </div>
-  <div class="pane show" id="mapWrap"><div id="map"></div></div>
+  <div class="pane show" id="mapWrap"><div id="map"></div>
+    <div class="ovctl" id="ovCtl" hidden>
+      <label class="cek"><input type="checkbox" id="inOv" checked> Gambar situasi di peta</label>
+      <input type="range" id="inOvOpa" min="10" max="100" value="55" aria-label="Kepekatan gambar di peta">
+    </div>
+  </div>
   <div id="kop" aria-live="polite">
-    <div class="judul"><b data-k="bidang">Bidang belum dipilih</b><button id="kopToggle" title="Ciutkan / buka">ciutkan</button></div>
+    <div class="judul"><b data-k="bidang">Bidang tanpa nama</b><button id="kopToggle" title="Ciutkan / buka">ciutkan</button></div>
     <dl>
-      <div><dt>Kelurahan</dt><dd data-k="wil">–</dd></div><div><dt>Kualitas data</dt><dd data-k="kw">–</dd></div>
-      <div><dt>Luas surat ukur</dt><dd data-k="luas">–</dd></div><div><dt>Luas poligon</dt><dd data-k="hasil">–</dd></div>
-      <div><dt>Skor kecocokan</dt><dd data-k="skor">–</dd></div><div><dt>Status</dt><dd><span class="st st-belum" data-k="status">–</span></dd></div>
+      <div class="lebar"><dt>Kelurahan</dt><dd data-k="wil">–</dd></div>
+      <div><dt>Luas diisi</dt><dd data-k="luas">–</dd></div><div><dt>Luas poligon</dt><dd data-k="hasil">–</dd></div>
+      <div><dt>Skor kecocokan</dt><dd data-k="skor">–</dd></div><div><dt>Kandidat</dt><dd data-k="kand">–</dd></div>
       <div class="lebar"><dt>Sistem koordinat ekspor</dt><dd data-k="crs">–</dd></div>
     </dl>
   </div>
 </main>
-</div>
-
-<div id="laci" role="dialog" aria-label="Daftar bidang">
-  <div class="kepala">
-    <div class="row"><h2 style="margin:0">Daftar bidang</h2><button class="btn nf" id="laciClose">Tutup</button></div>
-    <p class="hint" id="listCount"></p>
-    <div class="row">
-      <label class="btn nf" style="margin:0">Impor daftar (Excel/CSV)…<input type="file" id="fileList" accept=".xlsx,.xls,.csv,.txt" hidden></label>
-      <input type="search" id="listSearch" placeholder="Cari NIB, nomor hak, kelurahan…">
-      <select id="listFilter" class="nf" style="width:190px"><option value="semua">Semua status</option><option value="belum">Belum dikerjakan</option><option value="ditemukan">Ditemukan</option><option value="ragu">Ragu-ragu</option><option value="lapangan">Perlu cek lapangan</option><option value="tidak">Tidak ditemukan</option></select>
-    </div>
-  </div>
-  <div class="isi"><table><thead><tr><th>NIB</th><th>Nomor hak</th><th class="num">Luas (m²)</th><th>Kelurahan</th><th>KW</th><th>Status</th></tr></thead><tbody id="listBody"></tbody></table></div>
-  <div class="kaki">
-    <button class="btn" id="btnRekapXlsx">Rekap Excel</button><button class="btn" id="btnRekapCsv">Rekap CSV</button>
-    <button class="btn" id="btnAllDxf">Semua hasil ke DXF</button><button class="btn" id="btnAllKml">Semua hasil ke KML</button>
-    <span class="sp"></span><button class="btn dan" id="btnListClear">Kosongkan daftar</button>
-  </div>
 </div>
 
 <div id="log">

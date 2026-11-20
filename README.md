@@ -1,6 +1,6 @@
-# Pencocok Situasi Bidang → Poligon KML
+# Plot Bidang dari Gambar Situasi (Samarinda)
 
-Aplikasi web satu-file untuk membuat **poligon bidang tanah berkoordinat** (KML/KMZ untuk Google Earth Pro) dari:
+Aplikasi web satu-file untuk membuat **poligon bidang tanah berkoordinat** (DXF untuk AutoCAD, TM-3) dari:
 
 - nama **kota, kecamatan, kelurahan**,
 - **gambar situasi** (sketsa bidang + jalan di sekitarnya, dengan atau tanpa nama jalan),
@@ -14,15 +14,14 @@ Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya pa
 - **Offline:** unduh `index.html` dan buka di Chrome/Edge.
 - **Apa yang berubah:** lihat [CHANGELOG.md](CHANGELOG.md). Nomor versi tampil di samping judul aplikasi.
 
-## Cara pakai (plotting KW 4–6)
+## Cara pakai
 
-1. **Daftar bidang** → *Impor daftar* (Excel/CSV berisi NIB, nomor hak, luas, kelurahan, KW). Klik bidang yang akan dikerjakan.
-2. **Wilayah**: kecamatan/kelurahan terisi dari daftar (atau pilih di bilah atas). Bila ada bidang yang sudah didigitasi di AutoCAD, impor DXF-nya sebagai acuan agar hasil tidak menumpuk.
-3. **Gambar**: muat surat ukur / gambar situasi / peta analog, telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Pada peta analog, gambar bidang lain dengan alat *Bidang lain* dan beri label NIB.
-4. **Cocokkan**: pilih kandidat terbaik (atau pakai titik ikat bila meleset).
-5. **Hasil**: periksa tanda pada *Pemeriksaan data*, geser halus bila perlu, **Simpan hasil** dengan status, lalu ekspor **DXF** (TM-3) untuk AutoCAD atau KML untuk Google Earth. Rekap seluruh daftar diekspor dari laci *Daftar bidang*.
+1. **Wilayah**: pilih kecamatan dan kelurahan di bilah atas. Batas dan jalan langsung terpasang.
+2. **Gambar**: muat surat ukur / gambar situasi / peta analog, isi **luas tanah (m²)** sesuai BT/SU, telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Bidang lain pada peta analog digambar dengan alat *Bidang lain*. Ctrl+Z untuk mengurungkan.
+3. **Cocokkan**: lihat pratinjau tiap kandidat, pilih yang jalannya paling menempel. Bila meleset, pakai titik ikat.
+4. **Hasil**: nyalakan *Gambar situasi di peta* untuk membandingkan dengan citra satelit, geser halus bila perlu, lalu **Unduh DXF** (TM-3) untuk AutoCAD.
 
-**Data dinas** (daftar bidang, DXF acuan, gambar surat ukur) hanya diproses di browser dan tidak pernah dikirim ke repo ini. Fitur bantuan AI mengirim gambar ke server Anthropic — jangan dipakai untuk dokumen dinas tanpa izin.
+Gambar dan data yang dimuat hanya diproses di browser, tidak dikirim ke repo ini.
 
 ### Data Samarinda tersimpan
 `data/samarinda_wilayah.json` (batas 10 kecamatan & 59 kelurahan) dan `data/samarinda_jalan.json` (seluruh jalan) dibuat oleh GitHub Actions (`.github/workflows/data-samarinda.yml` → `tools/fetch_samarinda.py`) dari OpenStreetMap, diperbarui tiap bulan. Untuk memperbarui sekarang: tab **Actions** → *Perbarui data Samarinda (OSM)* → **Run workflow**. Kelengkapan batas kelurahan dicatat di `data/LAPORAN.txt`.
@@ -42,7 +41,7 @@ Tombol **🧾 Log** → **Unduh log (.txt)**. Berisi versi, browser, ringkasan i
 | `index.html` | Aplikasi siap pakai (hasil build) |
 | `src/core.js` | Algoritma: proyeksi, distance field (EDT), deteksi simpang, hipotesis, skor, penghalusan, UTM/TM-3 |
 | `src/app.js` | Antarmuka, peta (Leaflet), kanvas sketsa, ekspor, log |
-| `src/fitur.js` | Daftar bidang, bidang tambahan, referensi tumpang tindih, pemeriksaan data, DXF & world file |
+| `src/fitur.js` | Ekspor DXF, bidang lain (peta analog), gambar di atas peta, pratinjau kandidat, urungkan |
 | `src/shell.html` | Kerangka HTML + CSS |
 | `tools/fetch_samarinda.py` | Pengunduh data Samarinda (dijalankan GitHub Actions) |
 | `data/` | Data batas & jalan Samarinda (dibuat otomatis) |
@@ -57,7 +56,7 @@ node tests/test_core.js          # uji algoritma
 node tests/e2e/gen.js && python3 tests/e2e/prepare.py && python3 tests/test_fetch.py
 python3 tests/e2e/run.py         # uji alur penuh (butuh playwright + chrome)
 python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
-python3 tests/e2e/run3.py        # uji alur kerja KW (daftar, DXF, referensi, rekap)
+python3 tests/e2e/run3.py        # uji gambar di peta, pratinjau, urungkan, ekspor DXF
 ```
 
 ## Cara kerja singkat

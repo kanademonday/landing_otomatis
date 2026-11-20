@@ -53,8 +53,7 @@ async def main():
     print('err m', math.hypot((c[0]-sk['truth'][0])*110540,(c[1]-sk['truth'][1])*111320))
     await pg.click('[data-mv="n"]');await pg.click('[data-mv="rl"]')
     await pg.screenshot(path=D+'s4.png')
-    await pg.click('#btnKMZ');await pg.wait_for_timeout(300)
-    for bid in ['#btnKML','#btnCSV','#btnGeo','#btnPNG','#btnDXF','#btnWorld','#btnSave']:
+    for bid in ['#btnDXF','#btnSave']:
       if bid=='#btnSave': await pg.click('#btnMenu')
       async with pg.expect_download() as dl: await pg.click(bid)
       d=await dl.value; await d.save_as(D+'out_'+d.suggested_filename); print('dl',d.suggested_filename)

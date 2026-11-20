@@ -2,6 +2,16 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.1.0 — 2026-11-20 — Fokus pencarian lewat gambar situasi
+**Dihapus** (belum bisa dipakai untuk bidang KW 4–6 yang belum ada di peta pendaftaran): daftar bidang beserta status dan rekap, impor bidang acuan, isian luas buku tanah terpisah, KW dan status di kop gambar, bantuan AI, serta semua ekspor selain DXF (KML, KMZ, CSV, GeoJSON, PNG, world file). Isian "perkiraan lebar gambar" juga dihapus: **luas tanah (m²) kini wajib**, sesuai BT/SU/spreadsheet.
+
+**Baru**
+- **Gambar situasi di atas citra satelit**: setelah dicocokkan, gambar ditumpangkan transparan di peta (kepekatan bisa diatur) untuk dibandingkan dengan atap, pagar, dan batas kebun.
+- **Pratinjau tiap kandidat**: gambar kecil jalan pada gambar (merah) di atas jalan nyata (biru), sehingga kandidat yang tertukar mudah dikenali.
+- **Urungkan (Ctrl+Z)** untuk semua perubahan gambar, dan **sisipkan titik** dengan alat *Ubah titik* (klik di garis).
+
+**Ekspor**: hanya **DXF** (TM-3 50.2/50.1 atau UTM 50S) untuk AutoCAD. Buka di AutoCAD lalu *Save As* DWG bila perlu.
+
 ## v2.0.0 — 2026-11-20 — Alat kerja plotting KW 4–6
 **Tampilan baru** bergaya lembar gambar kadaster: bilah atas berisi pilihan kecamatan/kelurahan dan 4 langkah bernomor, panel kiri yang lebih lega, dan **kop gambar** di pojok kanan bawah (bidang, kelurahan, KW, luas surat ukur vs luas poligon, skor, status, sistem koordinat).
 
