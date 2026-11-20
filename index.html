@@ -331,7 +331,7 @@ ol.langkah li{margin:3px 0}
 <ol class="langkah">
         <li>Di AutoCAD, tekan <b>Esc</b> dua kali agar tidak ada perintah yang sedang berjalan.</li>
         <li>Klik kotak <i>command line</i> di bagian bawah (bukan area gambar).</li>
-        <li>Tekan <b>Ctrl+V</b>, lalu <b>Enter</b>. Polyline langsung tergambar di koordinatnya.</li>
+        <li>Tekan <b>Ctrl+V</b>, lalu <b>Enter satu kali</b>. Polyline langsung tergambar di koordinatnya. (Enter kedua akan mengulang perintah PLINE; tekan Esc bila itu terjadi.)</li>
         <li>Bila tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter.</li>
       </ol>
       <label for="inAcadFmt">Jenis AutoCAD</label>
@@ -986,7 +986,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.3.1';
+const APP_VERSION = '2.3.2';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2318,7 +2318,7 @@ function poligonAcad() {
 function perintahAcad() {
   const polys = poligonAcad(), f = v => v.toFixed(3);
   if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
-    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ') + ' ';
+    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ');
   const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');
   return `(progn (foreach pl '(${L0}) (command "_.PLINE") (foreach p pl (command "_non" (trans p 0 1))) (command "_C")) (princ "\\nPlot Bidang: ${polys.length} polyline digambar.") (princ))`;
 }

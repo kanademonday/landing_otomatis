@@ -228,7 +228,7 @@ function poligonAcad() {
 function perintahAcad() {
   const polys = poligonAcad(), f = v => v.toFixed(3);
   if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
-    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ') + ' ';
+    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ');
   const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');
   return `(progn (foreach pl '(${L0}) (command "_.PLINE") (foreach p pl (command "_non" (trans p 0 1))) (command "_C")) (princ "\\nPlot Bidang: ${polys.length} polyline digambar.") (princ))`;
 }
