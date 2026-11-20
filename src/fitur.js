@@ -375,7 +375,13 @@ function cekSkala(sLuas) {
 
 /* ---------- baca otomatis dengan AI lokal (Ollama) — gratis, berkas tetap di komputer ---------- */
 // Dua penyedia: 'groq' (online, gratis dengan batas pemakaian; tidak dipakai untuk pelatihan) atau 'ollama' (di komputer sendiri)
-const AI_BAWAAN = { groq: 'qwen/qwen3.6-27b', ollama: 'qwen2.5vl:7b' };
+const AI_BAWAAN = { groq: 'qwen/qwen3.8-27b', ollama: 'qwen2.5vl:7b' };
+// Urutan pilihan model pembaca gambar di Groq (model "Preview" bisa berganti nama)
+const GROQ_VISION = [/^qwen\/qwen3\.\d+-27b$/, /qwen.*vl/i, /llama-4-(scout|maverick)/i, /vision/i];
+function pilihModelVisi(ada) {
+  for (const re of GROQ_VISION) { const m = ada.filter(x => re.test(x)).sort().reverse()[0]; if (m) return m; }
+  return null;
+}
 const AI = { prov: 'groq', key: '', url: 'http://localhost:11434', model: AI_BAWAAN.groq, hasil: {}, sibuk: false };
 try { const v = JSON.parse(localStorage.getItem('plotkw.ai') || '{}'); Object.assign(AI, { prov: v.prov || AI.prov, key: v.key || '', url: v.url || AI.url, model: v.model || AI_BAWAAN[v.prov || AI.prov] }); } catch (e) { /* abaikan */ }
 function simpanSetAI() {
@@ -433,6 +439,14 @@ async function panggilGroq(gambarB64, prompt, skema) {
       await sleep(tunggu * 1000); continue;
     }
     if (res.status === 400 && /reasoning_effort/i.test(txt) && coba === 0) { LOG.warn('Model tidak mendukung reasoning_effort, dicoba tanpa'); continue; }
+    if ((res.status === 404 || res.status === 400) && /model/i.test(txt) && !AI._gantiOtomatis) {
+      AI._gantiOtomatis = true;
+      try {
+        const lm = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: 'Bearer ' + AI.key } });
+        const ganti = pilihModelVisi(((await lm.json()).data || []).map(m => m.id));
+        if (ganti && ganti !== AI.model) { LOG.info('Model Groq diganti otomatis saat membaca', { dari: AI.model, ke: ganti }); $('inAiModel').value = ganti; simpanSetAI(); toast(`Model AI diganti otomatis ke ${ganti}.`, 'ok'); continue; }
+      } catch (e) { /* lanjut ke pesan galat */ }
+    }
     if (!res.ok) {
       LOG.error('Groq: HTTP ' + res.status, txt.slice(0, 500));
       throw new Error(res.status === 401 ? 'Kunci API Groq tidak valid.' : res.status === 404 || /model/i.test(txt) && res.status === 400 ? `Model "${AI.model}" tidak tersedia di Groq. Cek daftar model di console.groq.com.` : `Groq: HTTP ${res.status} ${txt.slice(0, 120)}`);
@@ -473,9 +487,16 @@ const tesAI = safe('Tes AI', async () => {
     catch (e) { $('aiStatus').innerHTML = lencana('qc-bad', 'Tidak terhubung') + 'Periksa internet.'; throw new Error('Groq tidak bisa dihubungi'); }
     if (r.status === 401) { $('aiStatus').innerHTML = lencana('qc-bad', 'Kunci salah') + 'Periksa kunci API.'; return; }
     const ada = ((await r.json()).data || []).map(m => m.id);
-    $('aiStatus').innerHTML = ada.includes(AI.model) ? lencana('qc-ok', 'Siap') + `Model ${esc(AI.model)} tersedia.`
-      : lencana('qc-warn', 'Model tidak ada') + `Model yang bisa membaca gambar di Groq: cek console.groq.com/docs/vision. Tersedia: ${esc(ada.filter(x => /vl|vision|qwen|llama-4|scout|maverick/i.test(x)).join(', ') || ada.slice(0, 8).join(', '))}`;
-    LOG.info('Tes AI Groq', { model: AI.model, tersedia: ada.includes(AI.model) });
+    if (ada.includes(AI.model)) { $('aiStatus').innerHTML = lencana('qc-ok', 'Siap') + `Model ${esc(AI.model)} tersedia.`; LOG.info('Tes AI Groq', { model: AI.model, tersedia: true }); return; }
+    const ganti = pilihModelVisi(ada);
+    if (ganti) {
+      const lama = AI.model; $('inAiModel').value = ganti; simpanSetAI();
+      $('aiStatus').innerHTML = lencana('qc-ok', 'Siap') + `Model ${esc(lama)} tidak tersedia, otomatis diganti ke ${esc(ganti)}.`;
+      LOG.info('Model Groq diganti otomatis', { dari: lama, ke: ganti });
+    } else {
+      $('aiStatus').innerHTML = lencana('qc-warn', 'Model tidak ada') + `Tidak ada model pembaca gambar yang dikenali. Cek console.groq.com/docs/vision. Tersedia: ${esc(ada.slice(0, 10).join(', '))}`;
+      LOG.warn('Tidak ada model visi Groq yang dikenali', ada);
+    }
     return;
   }
   let r;

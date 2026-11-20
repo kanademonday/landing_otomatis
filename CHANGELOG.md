@@ -2,12 +2,16 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.6.1 — 2026-11-20
+- Model bawaan Groq kini `qwen/qwen3.8-27b` (`qwen3.6-27b` tidak tersedia di akun baru).
+- **Pilih model otomatis**: bila model yang diisi tidak tersedia, *Tes koneksi* (dan saat membaca) otomatis memilih model pembaca gambar yang ada di akun Groq.
+
 ## v2.6.0 — 2026-11-20 — Baca otomatis dengan AI (gratis)
 - **Baca otomatis** tiap berkas BT/SU (atau *Baca otomatis semua berkas*): AI membaca tiap halaman lalu menampilkan kelurahan, kecamatan, luas (angka & terbilang), skala, jalan, ukuran sisi, nomor SU, tahun, NIB, nomor hak, dan halaman gambar. Hasil **selalu ditampilkan untuk diperiksa**; tombol *Isi ke formulir* mengisi luas/skala/nama jalan (ditandai kuning sebagai hasil AI). Nama orang tidak dibaca.
 - **Cek silang otomatis**: luas angka vs luas terbilang, kelurahan terbaca vs kode di nama file.
 - **Telusuri gambar otomatis (AI)**: AI mengusulkan garis tengah jalan, sudut bidang, dan panah utara (gambar langsung diputar). Usulan diperbaiki dengan *Ubah titik*; Ctrl+Z membatalkan.
 - **Layanan AI gratis**, dua pilihan:
-  - **Online: Groq** (bawaan, model `qwen/qwen3.6-27b`). Tanpa pemasangan; tiap anggota tim membuat kunci API gratis di console.groq.com. Batas pemakaian gratis per akun; bila penuh, aplikasi menunggu lalu mencoba lagi. Menurut ketentuan Groq, data tidak dipakai untuk melatih AI dan tidak disimpan secara bawaan.
+  - **Online: Groq** (bawaan, model `qwen/qwen3.6-27b`; diganti `qwen/qwen3.8-27b` di v2.6.1). Tanpa pemasangan; tiap anggota tim membuat kunci API gratis di console.groq.com. Batas pemakaian gratis per akun; bila penuh, aplikasi menunggu lalu mencoba lagi. Menurut ketentuan Groq, data tidak dipakai untuk melatih AI dan tidak disimpan secara bawaan.
   - **Lokal: Ollama** (model `qwen2.5vl:7b`), berkas tidak keluar dari komputer.
 - Kunci API hanya disimpan di browser pengguna dan tidak pernah dicatat di log.
 

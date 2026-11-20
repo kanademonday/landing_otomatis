@@ -27,7 +27,7 @@ async def main():
       elif 'api.groq.com' in u:
         hdr = {'access-control-allow-origin': '*', 'access-control-allow-headers': '*'}
         if r.request.method == 'OPTIONS': await r.fulfill(status=204, headers=hdr); return
-        if u.endswith('/models'): await r.fulfill(body=json.dumps({'data': [{'id': 'qwen/qwen3.6-27b'}]}), content_type='application/json', headers=hdr); return
+        if u.endswith('/models'): await r.fulfill(body=json.dumps({'data': [{'id': 'llama-3.3-70b-versatile'}, {'id': 'qwen/qwen3.8-27b'}]}), content_type='application/json', headers=hdr); return
         calls['n'] += 1; calls['auth'].add(r.request.headers.get('authorization'))
         body = json.loads(r.request.post_data); cont = body['messages'][0]['content']
         calls['img'] += sum(1 for c in cont if c['type'] == 'image_url' and c['image_url']['url'].startswith('data:image/jpeg;base64,'))
@@ -55,8 +55,9 @@ async def main():
     await pg.click('[data-step="2"]')
     await pg.evaluate("document.getElementById('aiSet').open=true")
     print('layanan bawaan:', await pg.evaluate("[$('inAiProv').value,$('inAiModel').value]"))
+    await pg.fill('#inAiModel', 'qwen/qwen3.6-27b')  # model lama yang sudah tidak ada
     await pg.fill('#inAiKey', 'gsk_uji'); await pg.click('#btnAiTes'); await pg.wait_for_timeout(300)
-    print('tes koneksi:', await pg.inner_text('#aiStatus'))
+    print('tes koneksi:', await pg.inner_text('#aiStatus'), '| model sekarang', await pg.evaluate("$('inAiModel').value"))
     await pg.set_input_files('#fileImg', pdfdir + 'SU_16010801_00009_2001.pdf')
     await pg.wait_for_function("DOCS.list.length===1 && S.osm!==null", timeout=30000)
     await pg.click('[data-baca]')
