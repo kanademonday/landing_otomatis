@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.6.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1128,6 +1128,11 @@ function init() {
   document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
   $('btnCopyAcad').onclick = salinAcad;
+  isiSetAI();
+  $('inAiProv').onchange = () => { const lama = AI.prov; simpanSetAI(); if ($('inAiModel').value === AI_BAWAAN[lama] || !$('inAiModel').value) { $('inAiModel').value = AI_BAWAAN[AI.prov]; simpanSetAI(); } isiSetAI(); $('aiStatus').textContent = ''; };
+  for (const id of ['inAiKey', 'inAiUrl', 'inAiModel']) $(id).addEventListener('change', simpanSetAI);
+  $('btnAiTes').onclick = tesAI; $('btnBacaSemua').onclick = bacaSemua; $('btnTelusuriAI').onclick = telusuriOtomatis;
+  for (const id of ['inLuas', 'inSkala']) $(id).addEventListener('input', () => $(id).classList.remove('dari-ai'));
   $('inAcadFmt').onchange = () => { try { localStorage.setItem('plotkw.acad', $('inAcadFmt').value); } catch (e) { /* abaikan */ } isiAcadTxt(); };
   try { const v = localStorage.getItem('plotkw.acad'); if (v) $('inAcadFmt').value = v; } catch (e) { /* abaikan */ }
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);

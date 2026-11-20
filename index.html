@@ -138,6 +138,9 @@ td:first-child,th:first-child{text-align:left}
 ol.langkah{margin:10px 0 4px;padding-left:20px;font-size:14px;color:var(--tinta2)}
 ol.langkah li{margin:3px 0}
 /* ---------- berkas BT/SU ---------- */
+.hasil-ai table{font-size:13px;margin-top:4px}
+.hasil-ai td:first-child{color:var(--tinta2);width:40%}
+input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
 .doc{border:1px solid var(--garis);border-radius:var(--r);background:var(--putih);padding:8px;margin-top:8px}
 .doc-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .doc-h .hint{margin:0;flex:1}
@@ -263,6 +266,23 @@ ol.langkah li{margin:3px 0}
     <div class="drop" id="drop">Seret PDF buku tanah / surat ukur atau gambar ke sini, atau<br><label class="btn">Pilih berkas…<input type="file" id="fileImg" accept="application/pdf,.pdf,image/*" multiple hidden></label>
       <p class="hint" style="margin-bottom:0">Nama file seperti <i>SU_16010401_00001_1982.pdf</i> atau <i>BT_16010401100001.pdf</i> langsung mengisi kelurahan. Berkas hanya dibaca di browser ini.</p></div>
     <div id="docList"></div>
+    <button class="btn" id="btnBacaSemua" hidden style="width:100%;margin-top:8px">Baca otomatis semua berkas</button>
+    <details id="aiSet" style="margin-top:10px"><summary>Pengaturan baca otomatis (AI)</summary>
+      <p class="hint">AI membaca isian (luas, skala, kelurahan, jalan) dan menelusuri gambar. Hasilnya <b>selalu perlu diperiksa</b>, terutama tulisan tangan.</p>
+      <label for="inAiProv">Layanan AI</label>
+      <select id="inAiProv"><option value="groq">Online gratis: Groq (tanpa pasang apa pun)</option><option value="ollama">Di komputer ini: Ollama (gratis, berkas tidak keluar)</option></select>
+      <div data-prov="groq">
+        <label for="inAiKey">Kunci API Groq</label><input type="password" id="inAiKey" placeholder="gsk_…" autocomplete="off">
+        <ol class="langkah"><li>Buka <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>, masuk dengan akun Google.</li><li>Klik <i>Create API Key</i>, salin kuncinya ke kotak di atas.</li><li>Kunci hanya disimpan di browser ini. Tiap anggota tim sebaiknya memakai kunci sendiri, karena batas gratisnya dihitung per akun.</li></ol>
+        <p class="hint">Gratis dengan batas pemakaian per menit/hari; bila penuh, aplikasi menunggu lalu mencoba lagi. Menurut ketentuan Groq, data tidak dipakai untuk melatih AI dan tidak disimpan secara bawaan.</p>
+      </div>
+      <div data-prov="ollama" hidden>
+        <label for="inAiUrl">Alamat Ollama</label><input type="text" id="inAiUrl" placeholder="http://localhost:11434">
+        <p class="hint">Pasang Ollama, jalankan <code>ollama pull qwen2.5vl:7b</code>, lalu atur variabel lingkungan <code>OLLAMA_ORIGINS=https://kanademonday.github.io</code> dan jalankan ulang Ollama.</p>
+      </div>
+      <label for="inAiModel">Model</label><input type="text" id="inAiModel">
+      <div class="row" style="margin-top:8px"><button class="btn nf" id="btnAiTes">Tes koneksi</button><span class="hint" id="aiStatus" style="margin:0"></span></div>
+    </details>
 
     <section class="blok">
       <h3>Data bidang</h3>
@@ -295,6 +315,7 @@ ol.langkah li{margin:3px 0}
 
     <section class="blok">
       <h3>Jalan pada gambar</h3>
+      <button class="btn" id="btnTelusuriAI" style="width:100%;margin-bottom:6px">Telusuri gambar otomatis (AI)</button>
       <p class="hint">Telusuri jalan dengan alat <b>Jalan</b>: klik titik demi titik, Enter untuk selesai. Tempelkan ujung jalan ke jalan lain agar simpang terbaca (lingkaran kuning).</p>
       <label for="inRoadName">Nama jalan untuk garis berikutnya</label>
       <input type="text" id="inRoadName" placeholder="mis. Jl. Pemuda (opsional)">
@@ -1013,7 +1034,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.6.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2142,6 +2163,11 @@ function init() {
   document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
   $('btnCopyAcad').onclick = salinAcad;
+  isiSetAI();
+  $('inAiProv').onchange = () => { const lama = AI.prov; simpanSetAI(); if ($('inAiModel').value === AI_BAWAAN[lama] || !$('inAiModel').value) { $('inAiModel').value = AI_BAWAAN[AI.prov]; simpanSetAI(); } isiSetAI(); $('aiStatus').textContent = ''; };
+  for (const id of ['inAiKey', 'inAiUrl', 'inAiModel']) $(id).addEventListener('change', simpanSetAI);
+  $('btnAiTes').onclick = tesAI; $('btnBacaSemua').onclick = bacaSemua; $('btnTelusuriAI').onclick = telusuriOtomatis;
+  for (const id of ['inLuas', 'inSkala']) $(id).addEventListener('input', () => $(id).classList.remove('dari-ai'));
   $('inAcadFmt').onchange = () => { try { localStorage.setItem('plotkw.acad', $('inAcadFmt').value); } catch (e) { /* abaikan */ } isiAcadTxt(); };
   try { const v = localStorage.getItem('plotkw.acad'); if (v) $('inAcadFmt').value = v; } catch (e) { /* abaikan */ }
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);
@@ -2157,6 +2183,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 <script>
 /* ===== FITUR: ekspor AutoCAD, bidang lain (peta analog), gambar di atas peta, pratinjau kandidat, riwayat ===== */
 const SET = { crs: 'tm3-50.2' };
+const normKey = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
 try { const v = localStorage.getItem('plotkw.crs'); if (v && CORE.CRS[v]) SET.crs = v; } catch (e) { /* abaikan */ }
 /* ---------- ekspor AutoCAD ---------- */
 function cornersCRS() { // sudut gambar → koordinat CRS
@@ -2486,11 +2513,16 @@ function renderDocs() {
   if (!DOCS.list.length) { el.innerHTML = ''; return; }
   el.innerHTML = DOCS.list.map(d => {
     const k = d.info.kode ? (KODE_KEL[d.info.kode] ? `${KODE_KEL[d.info.kode][1]}, ${KODE_KEL[d.info.kode][0]}` : `kode ${d.info.kode} (belum dikenal)`) : 'kode wilayah tidak terbaca dari nama file';
-    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
-      <div class="thumbs">${d.thumbs.map((t, i) => `<button class="thumb" data-doc="${d.id}" data-pg="${i + 1}" title="Halaman ${i + 1}"><img src="${t.url}" alt="Halaman ${i + 1}"><span>${i + 1}</span></button>`).join('')}</div></div>`;
+    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span><button class="btn kecil nf" data-baca="${d.id}">${AI.hasil[d.id] ? 'Baca ulang' : 'Baca otomatis'}</button><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
+      <div class="thumbs">${d.thumbs.map((t, i) => `<button class="thumb" data-doc="${d.id}" data-pg="${i + 1}" title="Halaman ${i + 1}"><img src="${t.url}" alt="Halaman ${i + 1}"><span>${i + 1}</span></button>`).join('')}</div>
+      <div data-hasil="${d.id}">${htmlHasil(d)}</div></div>`;
   }).join('');
   el.querySelectorAll('.thumb').forEach(b => b.onclick = () => bukaPenampil(b.dataset.doc, +b.dataset.pg));
   el.querySelectorAll('[data-hapus]').forEach(b => b.onclick = () => { DOCS.list = DOCS.list.filter(d => d.id !== b.dataset.hapus); renderDocs(); });
+  el.querySelectorAll('[data-baca]').forEach(b => b.onclick = () => bacaBerkas(b.dataset.baca));
+  el.querySelectorAll('[data-isi]').forEach(b => b.onclick = () => isiDariHasil(b.dataset.isi));
+  el.querySelectorAll('[data-gbr]').forEach(b => b.onclick = () => { const d = DOCS.list.find(x => x.id === b.dataset.gbr); if (d) bukaPenampil(d.id, AI.hasil[d.id].gabung.halamanGambar); });
+  $('btnBacaSemua').hidden = DOCS.list.length < 2;
 }
 const VW = { doc: null, pg: 1, z: 1 };
 const bukaPenampil = safe('Buka halaman', async (id, pg) => {
@@ -2523,6 +2555,250 @@ function cekSkala(sLuas) {
   const sSk = N * 0.0254 / dpi; // meter per piksel menurut skala gambar
   return { sSk, beda: sLuas ? (sLuas / sSk - 1) * 100 : null };
 }
+
+/* ---------- baca otomatis dengan AI lokal (Ollama) — gratis, berkas tetap di komputer ---------- */
+// Dua penyedia: 'groq' (online, gratis dengan batas pemakaian; tidak dipakai untuk pelatihan) atau 'ollama' (di komputer sendiri)
+const AI_BAWAAN = { groq: 'qwen/qwen3.6-27b', ollama: 'qwen2.5vl:7b' };
+const AI = { prov: 'groq', key: '', url: 'http://localhost:11434', model: AI_BAWAAN.groq, hasil: {}, sibuk: false };
+try { const v = JSON.parse(localStorage.getItem('plotkw.ai') || '{}'); Object.assign(AI, { prov: v.prov || AI.prov, key: v.key || '', url: v.url || AI.url, model: v.model || AI_BAWAAN[v.prov || AI.prov] }); } catch (e) { /* abaikan */ }
+function simpanSetAI() {
+  AI.prov = $('inAiProv').value; AI.key = $('inAiKey').value.trim(); AI.url = ($('inAiUrl').value.trim() || AI.url).replace(/\/+$/, '');
+  AI.model = $('inAiModel').value.trim() || AI_BAWAAN[AI.prov];
+  try { localStorage.setItem('plotkw.ai', JSON.stringify({ prov: AI.prov, key: AI.key, url: AI.url, model: AI.model })); } catch (e) { /* abaikan */ }
+}
+function isiSetAI() {
+  $('inAiProv').value = AI.prov; $('inAiKey').value = AI.key; $('inAiUrl').value = AI.url; $('inAiModel').value = AI.model;
+  document.querySelectorAll('[data-prov]').forEach(e => { e.hidden = e.dataset.prov !== AI.prov; });
+}
+const SKEMA_BACA = {
+  type: 'object',
+  properties: {
+    jenis_halaman: { type: 'string', enum: ['formulir_surat_ukur', 'gambar_bidang', 'buku_tanah', 'lainnya'] },
+    desa_kelurahan: { type: ['string', 'null'] }, kecamatan: { type: ['string', 'null'] },
+    jalan: { type: 'array', items: { type: 'string' } },
+    luas_angka: { type: ['number', 'null'] }, luas_terbilang: { type: ['string', 'null'] },
+    skala: { type: ['number', 'null'] }, nomor_surat_ukur: { type: ['string', 'null'] }, tahun: { type: ['string', 'null'] },
+    nib: { type: ['string', 'null'] }, nomor_hak: { type: ['string', 'null'] },
+    ukuran_sisi_m: { type: 'array', items: { type: 'number' } },
+    keterbacaan: { type: 'string', enum: ['baik', 'sedang', 'buruk'] }
+  },
+  required: ['jenis_halaman', 'desa_kelurahan', 'kecamatan', 'jalan', 'luas_angka', 'luas_terbilang', 'skala', 'nomor_surat_ukur', 'tahun', 'nib', 'nomor_hak', 'ukuran_sisi_m', 'keterbacaan']
+};
+const PROMPT_BACA = `Ini satu halaman hasil scan dokumen pertanahan Indonesia lama dari Kota Samarinda (Buku Tanah, Surat Ukur, atau Gambar Situasi). Tulisannya bisa ketikan mesin tik atau tulisan tangan.
+Baca dengan teliti dan isi JSON sesuai skema:
+- jenis_halaman: formulir_surat_ukur (isian data surat ukur/gambar situasi), gambar_bidang (halaman berisi gambar/sketsa bidang tanah), buku_tanah, atau lainnya.
+- desa_kelurahan, kecamatan: seperti tertulis.
+- jalan: nama jalan/gang yang tertulis (di isian atau di gambar).
+- luas_angka: luas tanah dalam m² (angka saja). luas_terbilang: luas yang ditulis dengan huruf, bila ada.
+- skala: angka N dari "Skala 1 : N" bila ada.
+- ukuran_sisi_m: angka-angka ukuran sisi bidang yang tertulis pada gambar (meter).
+- nomor_surat_ukur, tahun, nib, nomor_hak bila tertulis.
+Aturan: JANGAN menebak. Bila tidak terbaca atau tidak ada, isi null (atau [] untuk daftar). Jangan menuliskan nama orang.`;
+async function panggilAI(gambarB64, prompt, skema) {
+  return AI.prov === 'ollama' ? panggilOllama(gambarB64, prompt, skema) : panggilGroq(gambarB64, prompt, skema);
+}
+async function panggilGroq(gambarB64, prompt, skema) {
+  if (!AI.key) throw new Error('Isi kunci API Groq dulu (gratis, lihat panduan di bagian Baca otomatis).');
+  const isiPrompt = prompt + '\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n' + JSON.stringify(skema);
+  for (let coba = 0; coba < 4; coba++) {
+    const t0 = performance.now(); let res;
+    try {
+      res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AI.key },
+        body: JSON.stringify({ model: AI.model, temperature: 0, response_format: { type: 'json_object' }, reasoning_effort: 'none',
+          messages: [{ role: 'user', content: [{ type: 'text', text: isiPrompt }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + gambarB64 } }] }] })
+      });
+    } catch (e) { LOG.error('Groq tidak bisa dihubungi', e.message); throw new Error('Layanan AI online (Groq) tidak bisa dihubungi. Periksa internet.'); }
+    const txt = await res.text();
+    if (res.status === 429) { // batas pemakaian gratis: tunggu lalu ulangi
+      const tunggu = Math.min(60, +(res.headers.get('retry-after') || 0) || 10 * (coba + 1));
+      LOG.warn(`Batas pemakaian Groq tercapai, menunggu ${tunggu} dtk`, txt.slice(0, 200)); toast(`Batas pemakaian gratis tercapai. Menunggu ${tunggu} detik lalu mencoba lagi…`, 'warn');
+      await sleep(tunggu * 1000); continue;
+    }
+    if (res.status === 400 && /reasoning_effort/i.test(txt) && coba === 0) { LOG.warn('Model tidak mendukung reasoning_effort, dicoba tanpa'); continue; }
+    if (!res.ok) {
+      LOG.error('Groq: HTTP ' + res.status, txt.slice(0, 500));
+      throw new Error(res.status === 401 ? 'Kunci API Groq tidak valid.' : res.status === 404 || /model/i.test(txt) && res.status === 400 ? `Model "${AI.model}" tidak tersedia di Groq. Cek daftar model di console.groq.com.` : `Groq: HTTP ${res.status} ${txt.slice(0, 120)}`);
+    }
+    let isi;
+    try { const c = JSON.parse(txt).choices[0].message.content; isi = JSON.parse(c.slice(c.indexOf('{'), c.lastIndexOf('}') + 1)); }
+    catch (e) { LOG.error('Jawaban AI bukan JSON', txt.slice(0, 800)); throw new Error('Jawaban AI tidak bisa dibaca.'); }
+    LOG.info(`AI online menjawab dalam ${((performance.now() - t0) / 1000).toFixed(1)} dtk`);
+    return isi;
+  }
+  throw new Error('Batas pemakaian gratis Groq masih penuh. Coba lagi beberapa menit lagi.');
+}
+async function panggilOllama(gambarB64, prompt, skema) {
+  const t0 = performance.now();
+  let res;
+  try {
+    res = await fetch(AI.url + '/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: AI.model, stream: false, format: skema, options: { temperature: 0, num_ctx: 8192 }, messages: [{ role: 'user', content: prompt, images: [gambarB64] }] })
+    });
+  } catch (e) {
+    LOG.error('AI lokal tidak bisa dihubungi', { url: AI.url, err: e.message });
+    throw new Error(`AI lokal (Ollama) tidak bisa dihubungi di ${AI.url}. Pastikan Ollama berjalan dan OLLAMA_ORIGINS sudah diatur.`);
+  }
+  const txt = await res.text();
+  if (!res.ok) { LOG.error('AI lokal: HTTP ' + res.status, txt.slice(0, 500)); throw new Error(`AI lokal: HTTP ${res.status}. ${/not found/i.test(txt) ? `Model "${AI.model}" belum diunduh; jalankan: ollama pull ${AI.model}` : txt.slice(0, 120)}`); }
+  let isi;
+  try { isi = JSON.parse(JSON.parse(txt).message.content); } catch (e) { LOG.error('Jawaban AI bukan JSON', txt.slice(0, 800)); throw new Error('Jawaban AI tidak bisa dibaca.'); }
+  LOG.info(`AI lokal menjawab dalam ${((performance.now() - t0) / 1000).toFixed(1)} dtk`);
+  return isi;
+}
+const tesAI = safe('Tes AI', async () => {
+  simpanSetAI(); $('aiStatus').textContent = 'Menghubungi…';
+  const lencana = (k, t) => `<span class="${k}" style="padding:2px 6px;border-radius:4px">${t}</span> `;
+  if (AI.prov === 'groq') {
+    if (!AI.key) { $('aiStatus').innerHTML = lencana('qc-warn', 'Belum ada kunci') + 'Isi kunci API Groq.'; return; }
+    let r; try { r = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: 'Bearer ' + AI.key } }); }
+    catch (e) { $('aiStatus').innerHTML = lencana('qc-bad', 'Tidak terhubung') + 'Periksa internet.'; throw new Error('Groq tidak bisa dihubungi'); }
+    if (r.status === 401) { $('aiStatus').innerHTML = lencana('qc-bad', 'Kunci salah') + 'Periksa kunci API.'; return; }
+    const ada = ((await r.json()).data || []).map(m => m.id);
+    $('aiStatus').innerHTML = ada.includes(AI.model) ? lencana('qc-ok', 'Siap') + `Model ${esc(AI.model)} tersedia.`
+      : lencana('qc-warn', 'Model tidak ada') + `Model yang bisa membaca gambar di Groq: cek console.groq.com/docs/vision. Tersedia: ${esc(ada.filter(x => /vl|vision|qwen|llama-4|scout|maverick/i.test(x)).join(', ') || ada.slice(0, 8).join(', '))}`;
+    LOG.info('Tes AI Groq', { model: AI.model, tersedia: ada.includes(AI.model) });
+    return;
+  }
+  let r;
+  try { r = await fetch(AI.url + '/api/tags'); } catch (e) { $('aiStatus').innerHTML = lencana('qc-bad', 'Tidak terhubung') + 'Ollama belum berjalan, atau OLLAMA_ORIGINS belum diatur.'; throw new Error('Ollama tidak bisa dihubungi di ' + AI.url); }
+  const ada = ((await r.json()).models || []).map(m => m.name);
+  $('aiStatus').innerHTML = ada.includes(AI.model) ? lencana('qc-ok', 'Siap') + `Model ${esc(AI.model)} tersedia.` : lencana('qc-warn', 'Model belum ada') + `Jalankan <code>ollama pull ${esc(AI.model)}</code>.`;
+  LOG.info('Tes AI lokal', { url: AI.url, model: AI.model, tersedia: ada });
+});
+// Angka terbilang Indonesia → angka (untuk cek silang luas ketikan)
+function terbilang(t) {
+  if (!t) return null;
+  const w = t.toLowerCase().replace(/[^a-z ]/g, ' ').split(/\s+/).filter(Boolean);
+  const S1 = { nol: 0, satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9 };
+  let total = 0, cur = 0, ada = false;
+  for (const x of w) {
+    if (x === 'koma') break;
+    if (x in S1) { cur += S1[x]; ada = true; }
+    else if (x === 'sepuluh') { cur += 10; ada = true; } else if (x === 'sebelas') { cur += 11; ada = true; }
+    else if (x === 'belas') { cur = (cur % 10) + 10 + (cur - cur % 10); ada = true; }
+    else if (x === 'puluh') { cur = (cur % 10) * 10 + (cur - cur % 10); ada = true; }
+    else if (x === 'seratus') { cur += 100; ada = true; } else if (x === 'ratus') { cur = (cur % 100) * 100 + (cur - cur % 100); ada = true; }
+    else if (x === 'seribu') { total += 1000; ada = true; } else if (x === 'ribu') { total += (cur || 1) * 1000; cur = 0; ada = true; }
+  }
+  return ada ? total + cur : null;
+}
+function gabungHasil(hal) {
+  const g = { kelurahan: null, kecamatan: null, jalan: [], luas: null, luasTerbilang: null, skala: null, nomorSU: null, tahun: null, nib: null, nomorHak: null, sisi: [], halamanGambar: null, catatan: [] };
+  hal.forEach((h, i) => {
+    if (!h) return;
+    const ambil = (k, v) => { if (v != null && v !== '' && g[k] == null) g[k] = v; };
+    ambil('kelurahan', h.desa_kelurahan); ambil('kecamatan', h.kecamatan); ambil('luas', h.luas_angka); ambil('luasTerbilang', h.luas_terbilang);
+    ambil('skala', h.skala); ambil('nomorSU', h.nomor_surat_ukur); ambil('tahun', h.tahun); ambil('nib', h.nib); ambil('nomorHak', h.nomor_hak);
+    for (const j of h.jalan || []) if (j && !g.jalan.some(x => CORE.nameMatch(x, j))) g.jalan.push(j);
+    if (h.jenis_halaman === 'gambar_bidang' && g.halamanGambar == null) g.halamanGambar = i + 1;
+    if (h.ukuran_sisi_m && h.ukuran_sisi_m.length && !g.sisi.length) g.sisi = h.ukuran_sisi_m;
+    if (h.keterbacaan === 'buruk') g.catatan.push(`Halaman ${i + 1} sulit dibaca.`);
+  });
+  const tb = terbilang(g.luasTerbilang);
+  if (g.luas != null && tb != null && Math.abs(tb - g.luas) > 0.5) g.catatan.push(`Luas angka (${g.luas}) berbeda dengan luas terbilang (${tb}). Periksa di dokumen.`);
+  if (g.luas == null && tb != null) { g.luas = tb; g.catatan.push('Luas diambil dari tulisan huruf (terbilang).'); }
+  return g;
+}
+const bacaBerkas = safe('Baca otomatis', async id => {
+  const d = DOCS.list.find(x => x.id === id); if (!d) return;
+  if (AI.sibuk) { toast('AI masih membaca berkas lain. Tunggu sebentar.', 'warn'); return; }
+  simpanSetAI(); AI.sibuk = true;
+  const el = document.querySelector(`[data-hasil="${id}"]`);
+  try {
+    const hal = [];
+    for (let i = 1; i <= d.n; i++) {
+      if (el) el.innerHTML = `<p class="hint">Membaca halaman ${i} dari ${d.n} dengan AI…</p>`;
+      const r = await renderHalaman(d.pdf, i, null, 120);
+      hal.push(await panggilAI(r.url.split(',')[1], PROMPT_BACA, SKEMA_BACA));
+    }
+    const g = gabungHasil(hal);
+    AI.hasil[id] = { halaman: hal, gabung: g };
+    LOG.info(`Hasil baca ${d.info.jenis} ${d.info.nomor || ''}`, { luas: g.luas, skala: g.skala, kel: g.kelurahan, kec: g.kecamatan, jalan: g.jalan, halGambar: g.halamanGambar, catatan: g.catatan });
+    renderDocs();
+  } finally { AI.sibuk = false; }
+});
+async function bacaSemua() {
+  const L0 = DOCS.list.filter(d => !AI.hasil[d.id]);
+  if (!L0.length) { toast('Semua berkas sudah dibaca.'); return; }
+  for (const d of L0) await bacaBerkas(d.id);
+  toast(`${L0.length} berkas selesai dibaca. Periksa hasilnya sebelum dipakai.`, 'ok');
+}
+function htmlHasil(d) {
+  const h = AI.hasil[d.id]; if (!h) return '';
+  const g = h.gabung, kodeK = d.info.kode && KODE_KEL[d.info.kode];
+  const baris = [];
+  const row = (k, v) => v != null && v !== '' && !(Array.isArray(v) && !v.length) && baris.push(`<tr><td>${k}</td><td>${esc(Array.isArray(v) ? v.join(', ') : v)}</td></tr>`);
+  row('Kelurahan', g.kelurahan); row('Kecamatan', g.kecamatan); row('Luas (m²)', g.luas); row('Luas terbilang', g.luasTerbilang);
+  row('Skala 1:', g.skala); row('Jalan', g.jalan); row('Ukuran sisi (m)', g.sisi); row('Nomor SU', g.nomorSU); row('Tahun', g.tahun); row('NIB', g.nib); row('Nomor hak', g.nomorHak);
+  row('Halaman gambar', g.halamanGambar);
+  const cat = g.catatan.slice();
+  if (kodeK && g.kelurahan && normKey(g.kelurahan) && !normKey(kodeK[1]).includes(normKey(g.kelurahan).slice(0, 4))) cat.push(`Kelurahan terbaca "${g.kelurahan}", sedangkan kode file menunjuk ${kodeK[1]}.`);
+  return `<div class="hasil-ai"><p class="hint" style="margin:6px 0 2px">Hasil baca AI. <b>Periksa dengan dokumen</b> sebelum dipakai.</p>
+    <table>${baris.join('') || '<tr><td>Tidak ada yang terbaca.</td></tr>'}</table>
+    ${cat.length ? `<ul class="qc">${cat.map(c => `<li class="qc-warn">${esc(c)}</li>`).join('')}</ul>` : ''}
+    <div class="row" style="margin-top:6px"><button class="btn kecil pri nf" data-isi="${d.id}">Isi ke formulir</button>${g.halamanGambar ? `<button class="btn kecil nf" data-gbr="${d.id}">Buka halaman gambar (${g.halamanGambar})</button>` : ''}</div></div>`;
+}
+function isiDariHasil(id) {
+  const d = DOCS.list.find(x => x.id === id), h = AI.hasil[id]; if (!d || !h) return;
+  const g = h.gabung, diisi = [];
+  if (g.luas) { $('inLuas').value = g.luas; diisi.push('luas'); }
+  if (g.skala) { $('inSkala').value = g.skala; diisi.push('skala'); }
+  if (d.info.kode && !KODE_KEL[d.info.kode] && g.kelurahan) {
+    for (const [kec, kels] of SAMARINDA) for (const k of kels) if (normKey(k) === normKey(g.kelurahan.replace(/^(kel(urahan)?|desa)\.?\s*/i, ''))) {
+      $('inKec').value = kec; isiKelurahan(); $('inKel').value = k; DOCS.kodeTunggu = d.info.kode; ingatKode(); pilihDariDaftar(); diisi.push('kelurahan');
+    }
+  }
+  if (g.jalan.length && !$('inRoadName').value) { $('inRoadName').value = g.jalan[0]; diisi.push('nama jalan berikutnya'); }
+  for (const id2 of ['inLuas', 'inSkala']) $(id2).classList.add('dari-ai');
+  renderParcelInfo(); updateKop();
+  LOG.info('Hasil AI diisikan ke formulir', diisi);
+  toast(diisi.length ? `Terisi dari hasil baca: ${diisi.join(', ')}. Periksa kembali angkanya.` : 'Tidak ada isian yang bisa dipakai.', diisi.length ? 'ok' : 'warn');
+}
+
+/* ---------- telusuri gambar otomatis ---------- */
+const SKEMA_GAMBAR = {
+  type: 'object',
+  properties: {
+    bidang: { type: 'array', items: { type: 'array', items: { type: 'number' } } },
+    jalan: { type: 'array', items: { type: 'object', properties: { nama: { type: ['string', 'null'] }, titik: { type: 'array', items: { type: 'array', items: { type: 'number' } } } }, required: ['nama', 'titik'] } },
+    panah_utara: { type: ['object', 'null'], properties: { pangkal: { type: 'array', items: { type: 'number' } }, ujung: { type: 'array', items: { type: 'number' } } } },
+    skala: { type: ['number', 'null'] }
+  },
+  required: ['bidang', 'jalan', 'panah_utara', 'skala']
+};
+const PROMPT_GAMBAR = `Ini gambar situasi bidang tanah dari surat ukur lama. Koordinat memakai skala 0–1000 terhadap gambar ini (x dari kiri ke kanan, y dari atas ke bawah).
+Berikan JSON:
+- bidang: titik-titik sudut bidang tanah UTAMA (yang diberi nomor/arsir/garis tebal), berurutan mengelilingi bidang, sebagai [x,y].
+- jalan: untuk setiap jalan/gang yang tergambar, titik-titik GARIS TENGAH jalan [x,y] dari ujung ke ujung, beserta nama bila tertulis (selain itu null). Jalan biasanya digambar sebagai dua garis sejajar.
+- panah_utara: pangkal dan ujung (mata panah) panah utara, atau null bila tidak ada.
+- skala: angka N dari "Skala 1 : N", atau null.
+Jangan menambahkan bidang atau jalan yang tidak tergambar.`;
+const telusuriOtomatis = safe('Telusuri otomatis', async () => {
+  if (!S.img) throw new Error('Muat gambar situasi dulu.');
+  if (AI.sibuk) { toast('AI masih bekerja. Tunggu sebentar.', 'warn'); return; }
+  simpanSetAI(); AI.sibuk = true;
+  $('btnTelusuriAI').disabled = true; $('btnTelusuriAI').textContent = 'AI sedang menelusuri gambar…';
+  try {
+    const mx = 1400, k = Math.min(1, mx / Math.max(S.img.w, S.img.h));
+    const cv = document.createElement('canvas'); cv.width = Math.round(S.img.w * k); cv.height = Math.round(S.img.h * k);
+    const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); c.drawImage(imgEl, 0, 0, cv.width, cv.height);
+    const J = await panggilAI(cv.toDataURL('image/jpeg', 0.9).split(',')[1], PROMPT_GAMBAR, SKEMA_GAMBAR);
+    const ke = p => Array.isArray(p) && p.length >= 2 && isFinite(p[0]) && isFinite(p[1]) ? [Math.max(0, Math.min(1000, p[0])) * S.img.w / 1000, Math.max(0, Math.min(1000, p[1])) * S.img.h / 1000] : null;
+    const roads = (J.jalan || []).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean) })).filter(r => r.pts.length >= 2);
+    const parcel = (J.bidang || []).map(ke).filter(Boolean);
+    let n = 0;
+    if (roads.length) { S.roads = roads; n++; }
+    if (parcel.length >= 3) { S.parcel = parcel; n++; }
+    if (J.skala && !$('inSkala').value) $('inSkala').value = J.skala;
+    onSketchChanged();
+    LOG.info('Hasil telusur AI', { jalan: roads.length, titikBidang: parcel.length, panah: !!J.panah_utara, skala: J.skala });
+    const pu = J.panah_utara && ke(J.panah_utara.pangkal), uu = J.panah_utara && ke(J.panah_utara.ujung);
+    if (pu && uu) selesaiPanahUtara(pu, uu);
+    toast(n ? `AI mengusulkan ${roads.length} jalan dan ${parcel.length >= 3 ? 'bidang ' + parcel.length + ' titik' : 'tanpa bidang'}${pu && uu ? ', dan memutar gambar sesuai panah utara' : ''}. Periksa dan perbaiki dengan "Ubah titik" (Ctrl+Z untuk membatalkan).` : 'AI tidak menemukan jalan atau bidang pada gambar.', n ? 'ok' : 'warn');
+  } finally { AI.sibuk = false; $('btnTelusuriAI').disabled = false; $('btnTelusuriAI').textContent = 'Telusuri gambar otomatis (AI)'; }
+});
 
 </script>
 </body>

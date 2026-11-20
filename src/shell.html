@@ -138,6 +138,9 @@ td:first-child,th:first-child{text-align:left}
 ol.langkah{margin:10px 0 4px;padding-left:20px;font-size:14px;color:var(--tinta2)}
 ol.langkah li{margin:3px 0}
 /* ---------- berkas BT/SU ---------- */
+.hasil-ai table{font-size:13px;margin-top:4px}
+.hasil-ai td:first-child{color:var(--tinta2);width:40%}
+input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
 .doc{border:1px solid var(--garis);border-radius:var(--r);background:var(--putih);padding:8px;margin-top:8px}
 .doc-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .doc-h .hint{margin:0;flex:1}
@@ -263,6 +266,23 @@ ol.langkah li{margin:3px 0}
     <div class="drop" id="drop">Seret PDF buku tanah / surat ukur atau gambar ke sini, atau<br><label class="btn">Pilih berkas…<input type="file" id="fileImg" accept="application/pdf,.pdf,image/*" multiple hidden></label>
       <p class="hint" style="margin-bottom:0">Nama file seperti <i>SU_16010401_00001_1982.pdf</i> atau <i>BT_16010401100001.pdf</i> langsung mengisi kelurahan. Berkas hanya dibaca di browser ini.</p></div>
     <div id="docList"></div>
+    <button class="btn" id="btnBacaSemua" hidden style="width:100%;margin-top:8px">Baca otomatis semua berkas</button>
+    <details id="aiSet" style="margin-top:10px"><summary>Pengaturan baca otomatis (AI)</summary>
+      <p class="hint">AI membaca isian (luas, skala, kelurahan, jalan) dan menelusuri gambar. Hasilnya <b>selalu perlu diperiksa</b>, terutama tulisan tangan.</p>
+      <label for="inAiProv">Layanan AI</label>
+      <select id="inAiProv"><option value="groq">Online gratis: Groq (tanpa pasang apa pun)</option><option value="ollama">Di komputer ini: Ollama (gratis, berkas tidak keluar)</option></select>
+      <div data-prov="groq">
+        <label for="inAiKey">Kunci API Groq</label><input type="password" id="inAiKey" placeholder="gsk_…" autocomplete="off">
+        <ol class="langkah"><li>Buka <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>, masuk dengan akun Google.</li><li>Klik <i>Create API Key</i>, salin kuncinya ke kotak di atas.</li><li>Kunci hanya disimpan di browser ini. Tiap anggota tim sebaiknya memakai kunci sendiri, karena batas gratisnya dihitung per akun.</li></ol>
+        <p class="hint">Gratis dengan batas pemakaian per menit/hari; bila penuh, aplikasi menunggu lalu mencoba lagi. Menurut ketentuan Groq, data tidak dipakai untuk melatih AI dan tidak disimpan secara bawaan.</p>
+      </div>
+      <div data-prov="ollama" hidden>
+        <label for="inAiUrl">Alamat Ollama</label><input type="text" id="inAiUrl" placeholder="http://localhost:11434">
+        <p class="hint">Pasang Ollama, jalankan <code>ollama pull qwen2.5vl:7b</code>, lalu atur variabel lingkungan <code>OLLAMA_ORIGINS=https://kanademonday.github.io</code> dan jalankan ulang Ollama.</p>
+      </div>
+      <label for="inAiModel">Model</label><input type="text" id="inAiModel">
+      <div class="row" style="margin-top:8px"><button class="btn nf" id="btnAiTes">Tes koneksi</button><span class="hint" id="aiStatus" style="margin:0"></span></div>
+    </details>
 
     <section class="blok">
       <h3>Data bidang</h3>
@@ -295,6 +315,7 @@ ol.langkah li{margin:3px 0}
 
     <section class="blok">
       <h3>Jalan pada gambar</h3>
+      <button class="btn" id="btnTelusuriAI" style="width:100%;margin-bottom:6px">Telusuri gambar otomatis (AI)</button>
       <p class="hint">Telusuri jalan dengan alat <b>Jalan</b>: klik titik demi titik, Enter untuk selesai. Tempelkan ujung jalan ke jalan lain agar simpang terbaca (lingkaran kuning).</p>
       <label for="inRoadName">Nama jalan untuk garis berikutnya</label>
       <input type="text" id="inRoadName" placeholder="mis. Jl. Pemuda (opsional)">

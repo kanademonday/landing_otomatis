@@ -23,6 +23,13 @@ Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya pa
 
 Gambar dan data yang dimuat hanya diproses di browser, tidak dikirim ke repo ini.
 
+### Baca otomatis dengan AI (opsional, gratis)
+Langkah 2 → *Pengaturan baca otomatis (AI)*:
+- **Groq (online, bawaan)**: buat kunci API gratis di https://console.groq.com/keys, tempel di kotak *Kunci API Groq*, klik *Tes koneksi*. Tiap anggota tim memakai kunci sendiri (batas gratis dihitung per akun).
+- **Ollama (lokal)**: pasang Ollama, `ollama pull qwen2.5vl:7b`, set `OLLAMA_ORIGINS=https://kanademonday.github.io`, jalankan ulang Ollama.
+
+Lalu klik *Baca otomatis* pada berkas, periksa hasilnya, *Isi ke formulir*, buka halaman gambar, dan *Telusuri gambar otomatis*. Semua hasil AI harus diperiksa, terutama tulisan tangan.
+
 ### Data Samarinda tersimpan
 `data/samarinda_wilayah.json` (batas 10 kecamatan & 59 kelurahan) dan `data/samarinda_jalan.json` (seluruh jalan) dibuat oleh GitHub Actions (`.github/workflows/data-samarinda.yml` → `tools/fetch_samarinda.py`) dari OpenStreetMap, diperbarui tiap bulan. Untuk memperbarui sekarang: tab **Actions** → *Perbarui data Samarinda (OSM)* → **Run workflow**. Kelengkapan batas kelurahan dicatat di `data/LAPORAN.txt`.
 
@@ -59,6 +66,7 @@ python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
 python3 tests/e2e/run3.py        # uji gambar di peta, pratinjau, urungkan, ekspor DXF
 python3 tests/e2e/run4.py        # uji putar gambar, arah utara, salin ke AutoCAD vs DXF
 python3 tests/e2e/run5.py        # uji nama jalan benar vs keliru (nama sebagai petunjuk)
+python3 tests/e2e/run7.py        # uji baca otomatis AI (Groq & Ollama tiruan), terbilang, batas pemakaian
 python3 tests/e2e/run6.py        # uji buka PDF SU, kode wilayah, penampil, cek skala (SAMPEL=folder untuk PDF asli, tidak disimpan)
 ```
 
