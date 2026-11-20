@@ -270,9 +270,16 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
     <details id="aiSet" style="margin-top:10px"><summary>Pengaturan baca otomatis (AI)</summary>
       <p class="hint">AI membaca isian (luas, skala, kelurahan, jalan) dan menelusuri gambar. Hasilnya <b>selalu perlu diperiksa</b>, terutama tulisan tangan.</p>
       <label for="inAiProv">Layanan AI</label>
-      <select id="inAiProv"><option value="groq">Online gratis: Groq (tanpa pasang apa pun)</option><option value="ollama">Di komputer ini: Ollama (gratis, berkas tidak keluar)</option></select>
+      <select id="inAiProv"><option value="claude">Online: Claude (berbayar, paling teliti, hemat token)</option><option value="groq">Online gratis: Groq (tanpa pasang apa pun)</option><option value="ollama">Di komputer ini: Ollama (gratis, berkas tidak keluar)</option></select>
+      <div data-prov="groq claude">
+        <label for="inAiKey">Kunci API</label><input type="password" id="inAiKey" placeholder="gsk_…" autocomplete="off">
+      </div>
+      <div data-prov="claude" hidden>
+        <ol class="langkah"><li>Buka <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>, isi saldo kredit (mis. US$5), lalu buat API key.</li><li>Tempel kuncinya di atas. Kunci hanya disimpan di browser ini, jangan dibagikan atau ditulis di dokumen.</li><li>Model bawaan <code>claude-haiku-5-5</code> (hemat). Untuk tulisan tangan yang sulit: <code>claude-sonnet-5-5</code> (lebih teliti, ±20× lebih mahal).</li></ol>
+        <p class="hint">Hemat token: semua halaman satu berkas dikirim dalam satu permintaan, gambar diperkecil ke 1568 px, dan hasil baca disimpan sehingga berkas yang sama tidak dibaca dua kali. Perkiraan dengan Haiku: ± Rp30 per surat ukur.</p>
+        <p class="hint" id="aiPakai"></p>
+      </div>
       <div data-prov="groq">
-        <label for="inAiKey">Kunci API Groq</label><input type="password" id="inAiKey" placeholder="gsk_…" autocomplete="off">
         <ol class="langkah"><li>Buka <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>, masuk dengan akun Google.</li><li>Klik <i>Create API Key</i>, salin kuncinya ke kotak di atas.</li><li>Kunci hanya disimpan di browser ini. Tiap anggota tim sebaiknya memakai kunci sendiri, karena batas gratisnya dihitung per akun.</li></ol>
         <p class="hint">Gratis dengan batas pemakaian per menit/hari; bila penuh, aplikasi menunggu lalu mencoba lagi. Menurut ketentuan Groq, data tidak dipakai untuk melatih AI dan tidak disimpan secara bawaan.</p>
       </div>

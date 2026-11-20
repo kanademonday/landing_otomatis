@@ -30,7 +30,7 @@ function cekKewajaran(r) {
   const out = [], lin = getLuas();
   const raw = S.T && S.parcel ? CORE.polyArea(parcelWorld(S.T, false)) : 0;
   const tanda = (lvl, t) => out.push(`<li class="qc-${lvl}">${t}</li>`);
-  if (lin && S.parcel) { const sk = cekSkala(Math.sqrt(lin / CORE.polyArea(S.parcel))); if (sk && Math.abs(sk.beda) > 10) tanda('warn', `Skala dari luas berbeda ${fmt(sk.beda, 1)}% dari skala 1:${esc($('inSkala').value)} pada gambar. Luas, skala, atau gambar bidang mungkin keliru.`); else if (sk) tanda('ok', `Luas cocok dengan skala 1:${esc($('inSkala').value)} pada gambar (selisih ${fmt(sk.beda, 1)}%).`); }
+  if (lin && S.parcel) { const sk = cekSkala(Math.sqrt(lin / CORE.polyArea(S.parcel))); if (sk && Math.abs(sk.beda) > 10) tanda('info', `Ukuran bidang menurut skala 1:${esc($('inSkala').value)} berbeda ${fmt(sk.beda, 1)}% dari luas. Wajar bila hasil scan PDF tidak seukuran kertas aslinya; luas tetap dipakai sebagai acuan. Bila bentuk bidang tampak salah, periksa luas atau gambarnya.`); else if (sk) tanda('ok', `Luas cocok dengan skala 1:${esc($('inSkala').value)} pada gambar (selisih ${fmt(sk.beda, 1)}%).`); }
   if (lin) { const d = (raw / lin - 1) * 100; Math.abs(d) > 10 ? tanda('warn', `Bidang pada gambar × skala hasil cocok = ${fmt(raw, 0)} m² (selisih ${fmt(d, 1)}% dari luas yang diisi). Gambar mungkin tidak berskala, atau luasnya keliru.`) : tanda('ok', `Skala hasil cocok konsisten dengan luas (selisih ${fmt(d, 1)}%).`); }
   if (r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
@@ -289,15 +289,16 @@ const bukaBerkas = safe('Buka berkas', async files => {
     LOG.info(`Berkas dibuka: ${info.jenis} (${pdf.numPages} hal.)`, { kode: info.kode, nomor: info.nomor, tahun: info.tahun });
     for (let i = 1; i <= pdf.numPages; i++) d.thumbs.push(await renderHalaman(pdf, i, 150));
     terapkanKode(info);
+    if (CACHE_BACA[kunciBerkas(d)]) AI.hasil[d.id] = CACHE_BACA[kunciBerkas(d)];
   }
   renderDocs();
   const su = DOCS.list.filter(d => d.info.jenis === 'SU').at(-1);
   if (su && !S.img) toast('Klik halaman gambar pada surat ukur (yang ada panah utara dan skala), lalu "Pakai sebagai gambar situasi".', 'ok');
 });
 // Render satu halaman: lebar target (px) atau dpi target ({dpi})
-async function renderHalaman(pdf, no, lebar, dpi) {
+async function renderHalaman(pdf, no, lebar, dpi, panjang) {
   const pg = await pdf.getPage(no), v1 = pg.getViewport({ scale: 1 });
-  let sc = dpi ? dpi / 72 : lebar / v1.width;
+  let sc = panjang ? panjang / Math.max(v1.width, v1.height) : dpi ? dpi / 72 : lebar / v1.width;
   const maks = 3600; if (v1.width * sc > maks || v1.height * sc > maks) sc = maks / Math.max(v1.width, v1.height);
   const vp = pg.getViewport({ scale: sc }), cv = document.createElement('canvas');
   cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
@@ -338,7 +339,7 @@ function renderDocs() {
   }).join('');
   el.querySelectorAll('.thumb').forEach(b => b.onclick = () => bukaPenampil(b.dataset.doc, +b.dataset.pg));
   el.querySelectorAll('[data-hapus]').forEach(b => b.onclick = () => { DOCS.list = DOCS.list.filter(d => d.id !== b.dataset.hapus); renderDocs(); });
-  el.querySelectorAll('[data-baca]').forEach(b => b.onclick = () => bacaBerkas(b.dataset.baca));
+  el.querySelectorAll('[data-baca]').forEach(b => b.onclick = () => bacaBerkas(b.dataset.baca, !!AI.hasil[b.dataset.baca]));
   el.querySelectorAll('[data-digit]').forEach(b => b.onclick = () => digitasiOtomatis(b.dataset.digit));
   el.querySelectorAll('[data-isi]').forEach(b => b.onclick = () => isiDariHasil(b.dataset.isi));
   el.querySelectorAll('[data-gbr]').forEach(b => b.onclick = () => { const d = DOCS.list.find(x => x.id === b.dataset.gbr); if (d) bukaPenampil(d.id, AI.hasil[d.id].gabung.halamanGambar); });
@@ -378,23 +379,63 @@ function cekSkala(sLuas) {
 
 /* ---------- baca otomatis dengan AI lokal (Ollama) — gratis, berkas tetap di komputer ---------- */
 // Dua penyedia: 'groq' (online, gratis dengan batas pemakaian; tidak dipakai untuk pelatihan) atau 'ollama' (di komputer sendiri)
-const AI_BAWAAN = { groq: 'qwen/qwen3.8-27b', ollama: 'qwen2.5vl:7b' };
+const AI_BAWAAN = { groq: 'qwen/qwen3.8-27b', ollama: 'qwen2.5vl:7b', claude: 'claude-haiku-5-5' };
+// Harga Claude per juta token (USD) untuk perkiraan biaya: [masukan, keluaran]
+const HARGA_CLAUDE = [[/haiku/i, 0.10, 0.50], [/sonnet/i, 2, 10], [/opus/i, 4, 20]];
 // Urutan pilihan model pembaca gambar di Groq (model "Preview" bisa berganti nama)
 const GROQ_VISION = [/^qwen\/qwen3\.\d+-27b$/, /qwen.*vl/i, /llama-4-(scout|maverick)/i, /vision/i];
 function pilihModelVisi(ada) {
   for (const re of GROQ_VISION) { const m = ada.filter(x => re.test(x)).sort().reverse()[0]; if (m) return m; }
   return null;
 }
-const AI = { prov: 'groq', key: '', url: 'http://localhost:11434', model: AI_BAWAAN.groq, hasil: {}, sibuk: false };
-try { const v = JSON.parse(localStorage.getItem('plotkw.ai') || '{}'); Object.assign(AI, { prov: v.prov || AI.prov, key: v.key || '', url: v.url || AI.url, model: v.model || AI_BAWAAN[v.prov || AI.prov] }); } catch (e) { /* abaikan */ }
+const AI = { prov: 'groq', key: '', keys: {}, url: 'http://localhost:11434', model: AI_BAWAAN.groq, models: {}, hasil: {}, sibuk: false, pakai: { masuk: 0, keluar: 0, usd: 0, n: 0 } };
+try {
+  const v = JSON.parse(localStorage.getItem('plotkw.ai') || '{}');
+  AI.prov = v.prov || AI.prov; AI.url = v.url || AI.url;
+  AI.keys = v.keys || (v.key ? { [v.prov || 'groq']: v.key } : {}); AI.models = v.models || (v.model ? { [v.prov || 'groq']: v.model } : {});
+  AI.key = AI.keys[AI.prov] || ''; AI.model = AI.models[AI.prov] || AI_BAWAAN[AI.prov];
+  Object.assign(AI.pakai, JSON.parse(localStorage.getItem('plotkw.aipakai') || '{}'));
+} catch (e) { /* abaikan */ }
 function simpanSetAI() {
   AI.prov = $('inAiProv').value; AI.key = $('inAiKey').value.trim(); AI.url = ($('inAiUrl').value.trim() || AI.url).replace(/\/+$/, '');
   AI.model = $('inAiModel').value.trim() || AI_BAWAAN[AI.prov];
-  try { localStorage.setItem('plotkw.ai', JSON.stringify({ prov: AI.prov, key: AI.key, url: AI.url, model: AI.model })); } catch (e) { /* abaikan */ }
+  AI.keys[AI.prov] = AI.key; AI.models[AI.prov] = AI.model;
+  try { localStorage.setItem('plotkw.ai', JSON.stringify({ prov: AI.prov, keys: AI.keys, url: AI.url, models: AI.models })); } catch (e) { /* abaikan */ }
+}
+function gantiPenyedia() {
+  const lama = AI.prov, baru = $('inAiProv').value;
+  AI.keys[lama] = $('inAiKey').value.trim(); AI.models[lama] = $('inAiModel').value.trim() || AI_BAWAAN[lama];
+  AI.prov = baru; AI.key = AI.keys[baru] || ''; AI.model = AI.models[baru] || AI_BAWAAN[baru];
+  isiSetAI(); simpanSetAI(); $('aiStatus').textContent = '';
 }
 function isiSetAI() {
   $('inAiProv').value = AI.prov; $('inAiKey').value = AI.key; $('inAiUrl').value = AI.url; $('inAiModel').value = AI.model;
-  document.querySelectorAll('[data-prov]').forEach(e => { e.hidden = e.dataset.prov !== AI.prov; });
+  $('inAiKey').placeholder = AI.prov === 'claude' ? 'sk-ant-…' : 'gsk_…';
+  document.querySelectorAll('[data-prov]').forEach(e => { e.hidden = !e.dataset.prov.split(' ').includes(AI.prov); });
+  tampilPakai();
+}
+function tampilPakai() {
+  const el = $('aiPakai'); if (!el) return;
+  const p = AI.pakai;
+  el.textContent = p.n ? `Pemakaian Claude di browser ini: ${p.n} permintaan, ${(p.masuk / 1000).toFixed(1)} rb token masuk, ${(p.keluar / 1000).toFixed(1)} rb token keluar, sekitar US$${p.usd.toFixed(4)} (± Rp${Math.round(p.usd * 16500).toLocaleString('id-ID')}).` : 'Belum ada pemakaian Claude di browser ini.';
+}
+function catatPakai(model, u) {
+  if (!u) return 0;
+  const h = HARGA_CLAUDE.find(x => x[0].test(model)) || HARGA_CLAUDE[0];
+  const masuk = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) * 1.25 + (u.cache_read_input_tokens || 0) * 0.1, keluar = u.output_tokens || 0;
+  const usd = (masuk * h[1] + keluar * h[2]) / 1e6;
+  Object.assign(AI.pakai, { masuk: AI.pakai.masuk + (u.input_tokens || 0), keluar: AI.pakai.keluar + keluar, usd: AI.pakai.usd + usd, n: AI.pakai.n + 1 });
+  try { localStorage.setItem('plotkw.aipakai', JSON.stringify(AI.pakai)); } catch (e) { /* abaikan */ }
+  tampilPakai();
+  return usd;
+}
+// Simpan hasil baca per berkas, agar membuka berkas yang sama tidak membayar/membaca ulang
+const CACHE_BACA = (() => { try { return JSON.parse(localStorage.getItem('plotkw.baca') || '{}'); } catch (e) { return {}; } })();
+const kunciBerkas = d => d.nama + '|' + d.n;
+function simpanCacheBaca(d) {
+  CACHE_BACA[kunciBerkas(d)] = AI.hasil[d.id];
+  const ks = Object.keys(CACHE_BACA); if (ks.length > 300) delete CACHE_BACA[ks[0]];
+  try { localStorage.setItem('plotkw.baca', JSON.stringify(CACHE_BACA)); } catch (e) { /* abaikan */ }
 }
 const SKEMA_BACA = {
   type: 'object',
@@ -420,8 +461,43 @@ Baca dengan teliti dan isi JSON sesuai skema:
 - ukuran_sisi_m: angka-angka ukuran sisi bidang yang tertulis pada gambar (meter).
 - nomor_surat_ukur, tahun, nib, nomor_hak bila tertulis.
 Aturan: JANGAN menebak. Bila tidak terbaca atau tidak ada, isi null (atau [] untuk daftar). Jangan menuliskan nama orang.`;
-async function panggilAI(gambarB64, prompt, skema) {
+async function panggilAI(gambarB64, prompt, skema, maxTok) {
+  if (AI.prov === 'claude') return panggilClaude(gambarB64, prompt, skema, maxTok);
   return AI.prov === 'ollama' ? panggilOllama(gambarB64, prompt, skema) : panggilGroq(gambarB64, prompt, skema);
+}
+// Claude: jawaban terstruktur lewat satu "alat" wajib; beberapa gambar dalam satu permintaan
+async function panggilClaude(gambar, prompt, skema, maxTok = 1500) {
+  if (!AI.key) throw new Error('Isi kunci API Claude dulu (console.anthropic.com).');
+  const imgs = Array.isArray(gambar) ? gambar : [gambar];
+  const body = JSON.stringify({
+    model: AI.model, max_tokens: maxTok,
+    tools: [{ name: 'kirim_hasil', description: 'Kirim hasil pembacaan dalam format terstruktur.', input_schema: skema }],
+    tool_choice: { type: 'tool', name: 'kirim_hasil' },
+    messages: [{ role: 'user', content: [...imgs.map(b => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b } })), { type: 'text', text: prompt }] }]
+  });
+  for (let coba = 0; coba < 4; coba++) {
+    const t0 = performance.now(); let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', body,
+        headers: { 'content-type': 'application/json', 'x-api-key': AI.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } });
+    } catch (e) { LOG.error('Claude tidak bisa dihubungi', e.message); throw new Error('Claude tidak bisa dihubungi. Periksa internet.'); }
+    const txt = await res.text();
+    if (res.status === 429 || res.status === 529 || res.status >= 500) {
+      const tunggu = Math.min(60, +(res.headers.get('retry-after') || 0) || 5 * (coba + 1));
+      LOG.warn(`Claude sibuk (HTTP ${res.status}), menunggu ${tunggu} dtk`, txt.slice(0, 200)); toast(`Claude sedang sibuk. Mencoba lagi dalam ${tunggu} detik…`, 'warn');
+      await sleep(tunggu * 1000); continue;
+    }
+    if (!res.ok) {
+      LOG.error('Claude: HTTP ' + res.status, txt.slice(0, 500));
+      throw new Error(res.status === 401 ? 'Kunci API Claude tidak valid.' : /credit|billing|balance/i.test(txt) ? 'Saldo kredit API Claude habis. Isi saldo di console.anthropic.com.' : /model/i.test(txt) ? `Model "${AI.model}" tidak tersedia. Coba claude-haiku-5-5.` : `Claude: HTTP ${res.status} ${txt.slice(0, 120)}`);
+    }
+    const J = JSON.parse(txt), alat = (J.content || []).find(c => c.type === 'tool_use');
+    const usd = catatPakai(AI.model, J.usage);
+    if (!alat) { LOG.error('Jawaban Claude tanpa hasil terstruktur', txt.slice(0, 800)); throw new Error('Jawaban AI tidak bisa dibaca.'); }
+    LOG.info(`Claude menjawab dalam ${((performance.now() - t0) / 1000).toFixed(1)} dtk`, { model: AI.model, masuk: J.usage && J.usage.input_tokens, keluar: J.usage && J.usage.output_tokens, usd: +usd.toFixed(5), berhenti: J.stop_reason });
+    return alat.input;
+  }
+  throw new Error('Claude masih sibuk. Coba lagi beberapa menit lagi.');
 }
 async function panggilGroq(gambarB64, prompt, skema) {
   if (!AI.key) throw new Error('Isi kunci API Groq dulu (gratis, lihat panduan di bagian Baca otomatis).');
@@ -502,6 +578,17 @@ const tesAI = safe('Tes AI', async () => {
     }
     return;
   }
+  if (AI.prov === 'claude') {
+    if (!AI.key) { $('aiStatus').innerHTML = lencana('qc-warn', 'Belum ada kunci') + 'Isi kunci API Claude.'; return; }
+    let r; try { r = await fetch('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': AI.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } }); }
+    catch (e) { $('aiStatus').innerHTML = lencana('qc-bad', 'Tidak terhubung') + 'Periksa internet.'; throw new Error('Claude tidak bisa dihubungi'); }
+    if (r.status === 401) { $('aiStatus').innerHTML = lencana('qc-bad', 'Kunci salah') + 'Periksa kunci API.'; return; }
+    const ada = ((await r.json()).data || []).map(m => m.id);
+    if (!ada.includes(AI.model)) { const h = ada.filter(x => /haiku/.test(x)).sort().reverse()[0]; if (h) { $('inAiModel').value = h; simpanSetAI(); } }
+    $('aiStatus').innerHTML = ada.includes(AI.model) ? lencana('qc-ok', 'Siap') + `Model ${esc(AI.model)} tersedia.` : lencana('qc-warn', 'Model tidak ada') + `Tersedia: ${esc(ada.slice(0, 8).join(', '))}`;
+    LOG.info('Tes AI Claude', { model: AI.model, tersedia: ada.includes(AI.model) });
+    return;
+  }
   let r;
   try { r = await fetch(AI.url + '/api/tags'); } catch (e) { $('aiStatus').innerHTML = lencana('qc-bad', 'Tidak terhubung') + 'Ollama belum berjalan, atau OLLAMA_ORIGINS belum diatur.'; throw new Error('Ollama tidak bisa dihubungi di ' + AI.url); }
   const ada = ((await r.json()).models || []).map(m => m.name);
@@ -542,20 +629,28 @@ function gabungHasil(hal) {
   if (g.luas == null && tb != null) { g.luas = tb; g.catatan.push('Luas diambil dari tulisan huruf (terbilang).'); }
   return g;
 }
-const bacaBerkas = safe('Baca otomatis', async id => {
+const bacaBerkas = safe('Baca otomatis', async (id, paksa) => {
   const d = DOCS.list.find(x => x.id === id); if (!d) return;
+  if (!paksa && CACHE_BACA[kunciBerkas(d)]) { AI.hasil[id] = CACHE_BACA[kunciBerkas(d)]; LOG.info(`Hasil baca ${d.info.label} diambil dari simpanan (tanpa memanggil AI)`); renderDocs(); return; }
   if (AI.sibuk) { toast('AI masih membaca berkas lain. Tunggu sebentar.', 'warn'); return; }
   simpanSetAI(); AI.sibuk = true;
   const el = document.querySelector(`[data-hasil="${id}"]`);
   try {
-    const hal = [];
-    for (let i = 1; i <= d.n; i++) {
+    let hal = [];
+    if (AI.prov === 'claude') { // satu permintaan untuk semua halaman, gambar dibatasi 1568 px
+      if (el) el.innerHTML = `<p class="hint">Membaca ${d.n} halaman sekaligus dengan Claude…</p>`;
+      const imgs = [];
+      for (let i = 1; i <= d.n; i++) imgs.push((await renderHalaman(d.pdf, i, null, null, 1568)).url.split(',')[1]);
+      const J = await panggilAI(imgs, `Berikut ${d.n} halaman, berurutan dari halaman 1. Isi satu objek per halaman sesuai urutan.\n\n` + PROMPT_BACA,
+        { type: 'object', properties: { halaman: { type: 'array', items: SKEMA_BACA } }, required: ['halaman'] }, 600 * d.n);
+      hal = (J.halaman || []).slice(0, d.n); while (hal.length < d.n) hal.push(null);
+    } else for (let i = 1; i <= d.n; i++) {
       if (el) el.innerHTML = `<p class="hint">Membaca halaman ${i} dari ${d.n} dengan AI…</p>`;
       const r = await renderHalaman(d.pdf, i, null, 120);
       hal.push(await panggilAI(r.url.split(',')[1], PROMPT_BACA, SKEMA_BACA));
     }
     const g = gabungHasil(hal);
-    AI.hasil[id] = { halaman: hal, gabung: g };
+    AI.hasil[id] = { halaman: hal, gabung: g }; simpanCacheBaca(d);
     LOG.info(`Hasil baca ${d.info.jenis} ${d.info.nomor || ''}`, { luas: g.luas, skala: g.skala, kel: g.kelurahan, kec: g.kecamatan, jalan: g.jalan, halGambar: g.halamanGambar, catatan: g.catatan });
     renderDocs();
   } finally { AI.sibuk = false; }
@@ -609,11 +704,12 @@ const SKEMA_GAMBAR = {
   },
   required: ['bidang', 'jalan', 'panah_utara', 'skala']
 };
-const PROMPT_GAMBAR = `Ini gambar situasi bidang tanah dari surat ukur lama. Koordinat memakai skala 0–1000 terhadap gambar ini (x dari kiri ke kanan, y dari atas ke bawah).
+const PROMPT_GAMBAR = `Ini gambar situasi bidang tanah dari surat ukur lama. KOORDINAT_INFO
 Berikan JSON:
-- bidang: titik-titik sudut bidang tanah UTAMA (yang diberi nomor/arsir/garis tebal), berurutan mengelilingi bidang, sebagai [x,y].
-- jalan: untuk setiap jalan/gang yang tergambar, titik-titik GARIS TENGAH jalan [x,y] dari ujung ke ujung, beserta nama bila tertulis (selain itu null). Jalan biasanya digambar sebagai dua garis sejajar.
-- panah_utara: pangkal dan ujung (mata panah) panah utara, atau null bila tidak ada.
+- bidang: titik-titik SUDUT bidang tanah UTAMA, berurutan mengelilingi bidang, sebagai [x,y]. Bidang utama adalah poligon yang sudut-sudutnya diberi nomor kecil (1, 2, 3, 4 …), sering bergaris tebal atau diwarnai/diarsir tepinya. Letakkan titik TEPAT di perpotongan garis batas pada sudut itu. Rumah/bangunan di dalam bidang (kotak kecil berarsir) BUKAN batas bidang.
+- jalan: untuk setiap jalan/gang yang tergambar sebagai dua garis sejajar, titik-titik GARIS TENGAH di antara kedua garis itu, dari ujung ke ujung (titik tambahan di tikungan), beserta namanya bila tertulis (selain itu null).
+  Tulisan seperti "Tanah Hak", "Tanah Negara", "T.N.", "Hak Milik No …", nama orang, "Parit", atau "Sungai" menandai tanah/air di sebelahnya, BUKAN jalan; jangan dimasukkan sebagai jalan.
+- panah_utara: pangkal dan ujung (mata panah, huruf U/N) panah utara, atau null bila tidak ada.
 - skala: angka N dari "Skala 1 : N", atau null.
 Jangan menambahkan bidang atau jalan yang tidak tergambar.`;
 const telusuriOtomatis = safe('Telusuri otomatis', async () => {
@@ -625,10 +721,16 @@ const telusuriOtomatis = safe('Telusuri otomatis', async () => {
     const mx = 1400, k = Math.min(1, mx / Math.max(S.img.w, S.img.h));
     const cv = document.createElement('canvas'); cv.width = Math.round(S.img.w * k); cv.height = Math.round(S.img.h * k);
     const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); c.drawImage(imgEl, 0, 0, cv.width, cv.height);
-    const J = await panggilAI(cv.toDataURL('image/jpeg', 0.9).split(',')[1], PROMPT_GAMBAR, SKEMA_GAMBAR);
-    const ke = p => Array.isArray(p) && p.length >= 2 && isFinite(p[0]) && isFinite(p[1]) ? [Math.max(0, Math.min(1000, p[0])) * S.img.w / 1000, Math.max(0, Math.min(1000, p[1])) * S.img.h / 1000] : null;
-    const roads = (J.jalan || []).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean) })).filter(r => r.pts.length >= 2);
-    const parcel = (J.bidang || []).map(ke).filter(Boolean);
+    const piksel = AI.prov === 'claude', W = piksel ? cv.width : 1000, H = piksel ? cv.height : 1000;
+    const info = piksel ? `Koordinat dalam PIKSEL gambar ini (lebar ${cv.width}, tinggi ${cv.height}; x dari kiri, y dari atas).` : 'Koordinat memakai skala 0–1000 terhadap gambar ini (x dari kiri ke kanan, y dari atas ke bawah).';
+    const J = await panggilAI(cv.toDataURL('image/jpeg', 0.9).split(',')[1], PROMPT_GAMBAR.replace('KOORDINAT_INFO', info), SKEMA_GAMBAR, 2000);
+    const ke = p => Array.isArray(p) && p.length >= 2 && isFinite(p[0]) && isFinite(p[1]) ? [Math.max(0, Math.min(W, p[0])) * S.img.w / W, Math.max(0, Math.min(H, p[1])) * S.img.h / H] : null;
+    const bukanJalan = n => n && !/\b(jalan|jl|jln|gang|gg|lorong|lr)\b/i.test(n);
+    const dibuang = (J.jalan || []).filter(j => bukanJalan(j.nama)).map(j => j.nama);
+    if (dibuang.length) LOG.info('Garis bernama bukan jalan diabaikan', dibuang);
+    const roads = (J.jalan || []).filter(j => !bukanJalan(j.nama)).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean) })).filter(r => r.pts.length >= 2);
+    let parcel = (J.bidang || []).map(ke).filter(Boolean);
+    if (parcel.length >= 3) parcel = rapatkanBidang(parcel);
     let n = 0;
     if (roads.length) { S.roads = roads; n++; }
     if (parcel.length >= 3) { S.parcel = parcel; n++; }
@@ -674,3 +776,82 @@ const digitasiOtomatis = safe('Digitasi otomatis', async id => {
   LOG.info(`Digitasi otomatis selesai dalam ${dt} dtk`, { skor: +S.cands[0].r.score.toFixed(3), kandidat: S.cands.length });
   toast(`Digitasi otomatis selesai (${dt} dtk). Periksa hasil di peta & pemeriksaan data, lalu Salin bidang untuk AutoCAD.`, 'ok');
 });
+
+/* ---------- rapatkan bidang hasil AI ke garis tinta pada gambar ---------- */
+// AI sering meleset beberapa milimeter; poligon digeser/diputar/diskalakan sedikit, lalu tiap sudut dicari di sekitarnya
+// agar keempat sisinya menempel pada garis yang benar-benar tergambar.
+function petaTinta(maks) {
+  const k = Math.min(1, maks / Math.max(S.img.w, S.img.h)), w = Math.max(8, Math.round(S.img.w * k)), h = Math.max(8, Math.round(S.img.h * k));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, w, h); c.drawImage(imgEl, 0, 0, w, h);
+  const px = c.getImageData(0, 0, w, h).data, n = w * h, L = new Float32Array(n);
+  for (let i = 0; i < n; i++) L[i] = (0.299 * px[4 * i] + 0.587 * px[4 * i + 1] + 0.114 * px[4 * i + 2]) / 255;
+  // latar lokal (rata-rata kotak) lewat citra integral
+  const I = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) { let r = 0; for (let x = 0; x < w; x++) { r += L[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + r; } }
+  const rad = Math.max(6, Math.round(Math.max(w, h) / 80)), INF = 1e9, d = new Float32Array(n);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const x0 = Math.max(0, x - rad), x1 = Math.min(w, x + rad + 1), y0 = Math.max(0, y - rad), y1 = Math.min(h, y + rad + 1);
+    const bg = (I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+    d[y * w + x] = bg - L[y * w + x] > 0.1 ? 0 : INF;
+  }
+  // jarak ke tinta terdekat (chamfer 2 lintasan)
+  const D = 1.4142;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; let v = d[i];
+    if (x > 0) v = Math.min(v, d[i - 1] + 1); if (y > 0) { v = Math.min(v, d[i - w] + 1); if (x > 0) v = Math.min(v, d[i - w - 1] + D); if (x < w - 1) v = Math.min(v, d[i - w + 1] + D); } d[i] = v; }
+  for (let y = h - 1; y >= 0; y--) for (let x = w - 1; x >= 0; x--) { const i = y * w + x; let v = d[i];
+    if (x < w - 1) v = Math.min(v, d[i + 1] + 1); if (y < h - 1) { v = Math.min(v, d[i + w] + 1); if (x < w - 1) v = Math.min(v, d[i + w + 1] + D); if (x > 0) v = Math.min(v, d[i + w - 1] + D); } d[i] = v; }
+  return { k, w, h, d };
+}
+function jarakSisi(P, M, tau) {
+  let s = 0, n = 0;
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], b = P[(i + 1) % P.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(2, Math.ceil(len / 2));
+    for (let j = 0; j < m; j++) {
+      const t = (j + 0.5) / m, x = Math.round(a[0] + (b[0] - a[0]) * t), y = Math.round(a[1] + (b[1] - a[1]) * t);
+      s += x < 0 || y < 0 || x >= M.w || y >= M.h ? tau : Math.min(tau, M.d[y * M.w + x]); n++;
+    }
+  }
+  return s / n;
+}
+function rapatkanBidang(poly) {
+  try {
+    const t0 = performance.now(), M = petaTinta(1000), tau = 6;
+    const P0 = poly.map(p => [p[0] * M.k, p[1] * M.k]), c = CORE.centroid(P0), uk = Math.sqrt(Math.abs(CORE.polyArea(P0)));
+    if (!(uk > 8)) return poly;
+    const ubah = (P, dx, dy, th, sc) => { const co = Math.cos(th) * sc, si = Math.sin(th) * sc; return P.map(p => { const x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + co * x - si * y + dx, c[1] + si * x + co * y + dy]; }); };
+    const awal = jarakSisi(P0, M, tau);
+    if (awal < 1) { LOG.info('Bidang hasil AI sudah menempel pada garis gambar', { jarak_px: +awal.toFixed(2) }); return poly; }
+    let best = { e: awal, dx: 0, dy: 0, th: 0, sc: 1 };
+    const R = 0.45 * uk, st = Math.max(1.5, uk / 30);
+    for (let sc = 0.85; sc <= 1.151; sc += 0.05) for (let a = -6; a <= 6; a += 2) {
+      const th = a * Math.PI / 180;
+      for (let dx = -R; dx <= R; dx += st) for (let dy = -R; dy <= R; dy += st) {
+        const e = jarakSisi(ubah(P0, dx, dy, th, sc), M, tau);
+        if (e < best.e) best = { e, dx, dy, th, sc };
+      }
+    }
+    // penghalusan bertahap
+    for (const h of [st / 2, st / 4, 0.5]) {
+      let maju = true;
+      while (maju) { maju = false;
+        for (const [ddx, ddy, dth, dsc] of [[h, 0, 0, 0], [-h, 0, 0, 0], [0, h, 0, 0], [0, -h, 0, 0], [0, 0, 0.005, 0], [0, 0, -0.005, 0], [0, 0, 0, 0.01], [0, 0, 0, -0.01]]) {
+          const q = { dx: best.dx + ddx, dy: best.dy + ddy, th: best.th + dth, sc: best.sc + dsc };
+          const e = jarakSisi(ubah(P0, q.dx, q.dy, q.th, q.sc), M, tau);
+          if (e < best.e - 1e-6) { best = { e, ...q }; maju = true; }
+        }
+      }
+    }
+    let P = ubah(P0, best.dx, best.dy, best.th, best.sc);
+    // tiap sudut digeser sedikit (±4 px) agar sisi-sisinya menempel
+    for (let it = 0; it < 3; it++) for (let i = 0; i < P.length; i++) {
+      let bi = P[i], be = jarakSisi(P, M, tau);
+      for (let ox = -4; ox <= 4; ox++) for (let oy = -4; oy <= 4; oy++) { const Q = P.slice(); Q[i] = [P[i][0] + ox * 0.5, P[i][1] + oy * 0.5]; const e = jarakSisi(Q, M, tau); if (e < be) { be = e; bi = Q[i]; } }
+      P[i] = bi;
+    }
+    const akhir = jarakSisi(P, M, tau);
+    const terima = akhir < awal * 0.75 && akhir < 2.2;
+    LOG.info('Rapatkan bidang ke garis gambar', { jarakAwal_px: +awal.toFixed(2), jarakAkhir_px: +akhir.toFixed(2), geser_px: +(Math.hypot(best.dx, best.dy) / M.k).toFixed(1), putar_deg: +(best.th * 180 / Math.PI).toFixed(1), skala: +best.sc.toFixed(3), dipakai: terima, ms: Math.round(performance.now() - t0) });
+    return terima ? P.map(p => [p[0] / M.k, p[1] / M.k]) : poly;
+  } catch (e) { LOG.warn('Rapatkan bidang gagal, dipakai hasil AI apa adanya', e.message); return poly; }
+}

@@ -2,6 +2,14 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.8.0 — 2026-11-20 — Claude, bidang dirapatkan ke garis, hemat token
+- Layanan AI baru **Claude** (berbayar, lebih teliti). Model bawaan `claude-haiku-5-5`; `claude-sonnet-5-5` untuk tulisan tangan sulit. Kunci API disimpan terpisah per layanan, hanya di browser.
+- Hemat token: semua halaman satu berkas dibaca dalam **satu permintaan**, gambar dibatasi 1568 px, jawaban terstruktur dengan batas panjang, dan **hasil baca disimpan** sehingga membuka berkas yang sama tidak memanggil AI lagi ("Baca ulang" untuk memaksa). Pemakaian token dan perkiraan biaya tampil di pengaturan AI.
+- **Bidang hasil AI dirapatkan ke garis gambar**: poligon digeser/diputar/diskalakan sedikit lalu tiap sudut disetel agar sisi-sisinya menempel pada garis yang benar-benar tergambar (memperbaiki bidang yang meleset dari batas sebenarnya).
+- Garis bertuliskan "Tanah Hak", "Tanah Negara", dsb. tidak lagi dianggap jalan; petunjuk ke AI dipertegas (sudut bernomor = batas bidang, rumah di dalam bidang bukan batas).
+- Untuk Claude, koordinat diminta dalam piksel gambar (lebih tepat daripada skala 0–1000).
+- Selisih skala gambar vs luas kini berupa keterangan, bukan peringatan: hasil scan PDF sering tidak seukuran kertas asli, dan luas tetap menjadi acuan.
+
 ## v2.7.0 — 2026-11-20 — Digitasi otomatis satu tombol
 - Tombol **Digitasi otomatis** pada tiap berkas SU: membaca dokumen dengan AI → mengisi luas & skala → menyiapkan halaman gambar → menelusuri jalan, bidang, dan panah utara → memutar gambar ke utara → mencocokkan dengan peta → membuka langkah Hasil. Tinggal diperiksa lalu *Salin bidang untuk AutoCAD*.
 - Bila satu tahap gagal (luas tak terbaca, bidang/jalan tak ditemukan, kelurahan belum dikenal), proses berhenti di tahap itu dengan petunjuk apa yang perlu dilengkapi manual.

@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.7.0';
+const APP_VERSION = '2.8.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1129,7 +1129,7 @@ function init() {
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
   $('btnCopyAcad').onclick = salinAcad;
   isiSetAI();
-  $('inAiProv').onchange = () => { const lama = AI.prov; simpanSetAI(); if ($('inAiModel').value === AI_BAWAAN[lama] || !$('inAiModel').value) { $('inAiModel').value = AI_BAWAAN[AI.prov]; simpanSetAI(); } isiSetAI(); $('aiStatus').textContent = ''; };
+  $('inAiProv').onchange = gantiPenyedia;
   for (const id of ['inAiKey', 'inAiUrl', 'inAiModel']) $(id).addEventListener('change', simpanSetAI);
   $('btnAiTes').onclick = tesAI; $('btnBacaSemua').onclick = bacaSemua; $('btnTelusuriAI').onclick = telusuriOtomatis;
   for (const id of ['inLuas', 'inSkala']) $(id).addEventListener('input', () => $(id).classList.remove('dari-ai'));
