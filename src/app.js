@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.3.2';
+const APP_VERSION = '2.4.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -818,17 +818,18 @@ function renderReady() {
     ok(!!L0, L0 ? 'Luas tanah: ' + fmt(L0, 0) + ' m²' : 'Luas tanah (m²) belum diisi di langkah 2'),
     ({ yakin: '<li class="qc-ok">Utara = atas gambar, yakin (±15°)</li>', kira: '<li class="qc-ok">Utara = atas gambar, kira-kira (±45°)</li>' }[$('inNorthMode').value] || '<li class="qc-info">Arah utara tidak dipakai, putaran dicari bebas</li>')
   ];
+  if (S.roads.some(r => (r.name || '').trim())) items.push('<li class="qc-info">Nama jalan dipakai sebagai petunjuk saja; peringkat tetap dari bentuk jalan.</li>');
   let warn = '';
   if (S.roads.length && !SK.junc.length) warn = '<li class="qc-warn">Sketsa tanpa simpang: hasil bisa sangat ambigu. Isi nama jalan, arah utara, atau gunakan titik ikat.';
   else if (SK.junc.length === 1 && $('inNorthMode').value === 'bebas') warn = '<li class="qc-warn">Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
   $('readyInfo').innerHTML = '<ul class="qc">' + items.join('') + (warn ? warn + '</li>' : '') + '</ul>';
 }
-function buildCtx(s0) {
+function buildCtx(s0, tanpaNama) {
   const nodeXY = new Map();
   for (const id in S.osm.nodes) { const p = S.osm.nodes[id]; nodeXY.set(+id, PROJ.fwd(p[0], p[1])); }
   const t0 = performance.now();
   const ctx = CORE.prepareCtx({
-    ways: S.osm.ways, nodeXY, roadsImg: S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
+    ways: S.osm.ways, nodeXY, roadsImg: tanpaNama ? S.roads.map(r => ({ ...r, name: '' })) : S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
     s0, tau: Math.max(2, +$('inTau').value || 12), inArea: inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
     log: (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m)
   });
@@ -838,7 +839,7 @@ function buildCtx(s0) {
 function ensureCtx() {
   if (CTX) return CTX;
   if (!S.osm || !S.img || !S.roads.length || !S.parcel || !PROJ) return null;
-  try { CTX = buildCtx(S.T ? S.T.s : estS0()); } catch (e) { LOG.error('Gagal menyiapkan konteks skor', e); CTX = null; }
+  try { CTX = buildCtx(S.T ? S.T.s : estS0(), true); } catch (e) { LOG.error('Gagal menyiapkan konteks skor', e); CTX = null; }
   return CTX;
 }
 function estS0() {
@@ -861,11 +862,31 @@ const runMatch = safe('Pencocokan', async () => {
   $('btnMatch').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
   await sleep(30);
   const t0 = performance.now();
+  const adaNama = S.roads.some(r => (r.name || '').trim());
+  const prog = (a, b, ket) => (f, t) => { $('prog').style.width = ((a + (b - a) * f) * 100).toFixed(0) + '%'; $('progTx').textContent = ket + t; };
+  const logf = (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m);
   try {
-    CTX = buildCtx(s0);
-    const out = await CORE.matchAll(CTX, opt, (f, t) => { $('prog').style.width = (f * 100).toFixed(0) + '%'; $('progTx').textContent = t; },
-      (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m));
-    S.cands = out.map((c, i) => ({ T: c.T, r: c.r, label: '#' + (i + 1) }));
+    // 1) bentuk jalan saja — dasar peringkat
+    CTX = buildCtx(s0, true);
+    const out = await CORE.matchAll(CTX, opt, prog(0, adaNama ? 0.5 : 1, adaNama ? 'Bentuk jalan: ' : ''), logf);
+    let list = out.map(c => ({ T: c.T, r: c.r, sumber: 'bentuk' }));
+    // 2) bila ada nama jalan: cari juga dengan nama, gabungkan; nama hanya sebagai petunjuk
+    if (adaNama) {
+      const ctxN = buildCtx(s0, false);
+      const outN = await CORE.matchAll(ctxN, opt, prog(0.5, 1, 'Dengan nama jalan: '), logf);
+      for (const c of outN) list.push({ T: c.T, r: CORE.score(CTX, c.T, true), sumber: 'nama' });
+      for (const c of list) { const rn = CORE.score(ctxN, c.T, true); c.nama = rn.score >= c.r.score - 0.03; }
+      list.sort((a, b) => (b.r.score + (b.nama ? 0.02 : 0)) - (a.r.score + (a.nama ? 0.02 : 0)));
+      const anc = CTX.parcelC, uniq = [];
+      for (const c of list) {
+        const p = CORE.fwdT(c.T, anc[0], anc[1]);
+        if (uniq.some(u => { const q = CORE.fwdT(u.T, anc[0], anc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 20; })) continue;
+        uniq.push(c); if (uniq.length >= 6) break;
+      }
+      list = uniq;
+      LOG.info('Nama jalan dipakai sebagai petunjuk', list.map(c => ({ skorBentuk: +c.r.score.toFixed(3), namaCocok: c.nama, sumber: c.sumber })));
+    }
+    S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
   } finally { $('btnMatch').disabled = false; }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);
@@ -886,7 +907,7 @@ function renderCands() {
   S.cands.forEach((c, i) => {
     const [t, cl] = conf(i);
     const d = document.createElement('div'); d.className = 'item kand' + (i === S.sel ? ' sel' : '');
-    d.innerHTML = `<canvas data-ci="${i}" aria-hidden="true"></canvas><div><b>${esc(c.label)}</b> skor <b>${c.r ? (c.r.score * 100).toFixed(0) + '%' : '-'}</b> <span class="badge ${cl}">${t}</span>
+    d.innerHTML = `<canvas data-ci="${i}" aria-hidden="true"></canvas><div><b>${esc(c.label)}</b> skor <b>${c.r ? (c.r.score * 100).toFixed(0) + '%' : '-'}</b> <span class="badge ${cl}">${t}</span>${c.nama === true ? ' <span class="badge b-ok">nama jalan cocok</span>' : c.nama === false ? ' <span class="badge b-mid">nama jalan tidak cocok</span>' : ''}
       <div class="hint">${c.r ? `jalan menempel ${(c.r.within * 100).toFixed(0)}%, deviasi rata-rata ${fmt(c.r.dev, 1)} m, ` : ''}putar ${fmt(CORE.normAng(c.T.th) / DEG, 1)}° dari atas gambar, skala ${fmt(c.T.s, 3)} m/px${c.r && c.r.ovl > 0.02 ? `, <b>menumpuk ${(c.r.ovl * 100).toFixed(0)}%</b> dengan bidang lain` : ''}${c.rms != null ? ', RMS titik ikat ' + fmt(c.rms, 2) + ' m' : ''}</div></div>`;
     d.onclick = () => selectCand(i, true);
     el.appendChild(d);
@@ -1027,7 +1048,7 @@ const saveProj = safe('Simpan proyek', async () => {
   const o = {
     app: 'pencocok-situasi-bidang', version: APP_VERSION, saved: new Date().toISOString(),
     input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
-    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, adj: S.adj, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms })), sel: S.sel, T: S.T
+    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, adj: S.adj, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms, nama: c.nama })), sel: S.sel, T: S.T
   };
   download(new Blob([JSON.stringify(o)], { type: 'application/json' }), baseName() + '_proyek.json');
 });

@@ -58,6 +58,7 @@ python3 tests/e2e/run.py         # uji alur penuh (butuh playwright + chrome)
 python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
 python3 tests/e2e/run3.py        # uji gambar di peta, pratinjau, urungkan, ekspor DXF
 python3 tests/e2e/run4.py        # uji putar gambar, arah utara, salin ke AutoCAD vs DXF
+python3 tests/e2e/run5.py        # uji nama jalan benar vs keliru (nama sebagai petunjuk)
 ```
 
 ## Cara kerja singkat

@@ -34,6 +34,9 @@ function cekKewajaran(r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
     else if (r.score < 0.8) tanda('warn', 'Skor kecocokan sedang. Bandingkan gambar dengan citra satelit sebelum dipakai.');
     else tanda('ok', 'Jalan pada gambar menempel baik pada jalan nyata.');
+    const cs = S.sel >= 0 ? S.cands[S.sel] : null;
+    if (cs && cs.nama === false) tanda('warn', S.cands.some(x => x.nama) ? 'Nama jalan pada gambar tidak cocok di kandidat ini, padahal cocok di kandidat lain. Bandingkan keduanya di citra satelit; nama di gambar bisa saja sudah berubah.' : 'Nama jalan pada gambar tidak cocok dengan nama di peta. Bisa jadi nama jalan sudah berubah; hasil tetap berdasarkan bentuk jalan.');
+    else if (cs && cs.nama === true) tanda('ok', 'Nama jalan pada gambar sesuai dengan nama jalan di peta.');
     const dth = Math.abs(CORE.normAng(S.T.th)) / DEG, nm = $('inNorthMode').value;
     if (nm !== 'bebas' && dth > 8) tanda('warn', `Agar cocok, gambar harus diputar ${fmt(dth, 1)}° dari arah utaranya. Panah utara di gambar mungkin kurang tepat; periksa di citra satelit.`);
     else if (nm === 'bebas') tanda('info', `Hasil cocok memutar gambar ${fmt(dth, 1)}° dari arah atas gambar.`);

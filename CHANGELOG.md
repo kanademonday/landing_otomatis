@@ -2,6 +2,11 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.4.0 — 2026-11-20 — Nama jalan hanya sebagai petunjuk
+- Nama jalan pada gambar lama bisa sudah berganti, dan tidak ada catatan kapan. Kini bila nama jalan diisi, aplikasi mencari **dua kali** (bentuk jalan saja, dan dengan nama), menggabungkan kandidatnya, dan **mengurutkan berdasarkan bentuk jalan**. Nama hanya memberi sedikit bobot tambahan.
+- Tiap kandidat diberi tanda **nama jalan cocok** / **nama jalan tidak cocok**. Pemeriksaan hasil menjelaskan bila nama tidak cocok (kemungkinan nama sudah berubah) atau bila nama cocok di kandidat lain.
+- Uji: nama sengaja dipasang ke jalan yang salah tetap menghasilkan posisi yang benar.
+
 ## v2.3.2 — 2026-11-20
 - Format AutoCAD LT: tanpa spasi di akhir, sehingga Enter dari pengguna menutup polyline dan tidak mengulang PLINE.
 - Petunjuk: Enter cukup satu kali; Enter kedua mengulang perintah terakhir (tekan Esc).
