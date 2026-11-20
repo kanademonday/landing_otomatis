@@ -2,6 +2,10 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.7.0 — 2026-11-20 — Digitasi otomatis satu tombol
+- Tombol **Digitasi otomatis** pada tiap berkas SU: membaca dokumen dengan AI → mengisi luas & skala → menyiapkan halaman gambar → menelusuri jalan, bidang, dan panah utara → memutar gambar ke utara → mencocokkan dengan peta → membuka langkah Hasil. Tinggal diperiksa lalu *Salin bidang untuk AutoCAD*.
+- Bila satu tahap gagal (luas tak terbaca, bidang/jalan tak ditemukan, kelurahan belum dikenal), proses berhenti di tahap itu dengan petunjuk apa yang perlu dilengkapi manual.
+
 ## v2.6.1 — 2026-11-20
 - Model bawaan Groq kini `qwen/qwen3.8-27b` (`qwen3.6-27b` tidak tersedia di akun baru).
 - **Pilih model otomatis**: bila model yang diisi tidak tersedia, *Tes koneksi* (dan saat membaca) otomatis memilih model pembaca gambar yang ada di akun Groq.

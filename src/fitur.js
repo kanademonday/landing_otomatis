@@ -198,6 +198,7 @@ const putarGambar = safe('Putar gambar', async (delta) => {
   $('candList').innerHTML = '<p class="hint">Gambar diputar; jalankan pencocokan lagi.</p>';
   const url = cv.toDataURL(o.mime === 'image/jpeg' ? 'image/jpeg' : 'image/png', 0.92);
   setImage(url, S.img.name, true, true);
+  for (let i = 0; i < 100 && !(S.img && S.img.dataURL === url); i++) await sleep(50);
   LOG.info(`Gambar diputar ${fmt(delta, 1)}° (total ${fmt(nd, 1)}°)`, { w: w1, h: h1 });
   tampilRot(); aturOverlay();
 });
@@ -208,8 +209,9 @@ function selesaiPanahUtara(a, b) {
   if ($('inNorthMode').value === 'bebas') $('inNorthMode').value = 'kira';
   LOG.info(`Panah utara ditandai: ${fmt(phi, 1)}° dari atas gambar`);
   if (Math.abs(phi) < 0.3) { toast('Panah utara sudah menghadap ke atas.', 'ok'); return; }
-  putarGambar(-phi);
+  const janji = putarGambar(-phi);
   toast(`Gambar diputar ${fmt(-phi, 1)}° agar utara menghadap ke atas.`, 'ok');
+  return janji;
 }
 
 /* ---------- geser/putar bidang saja & sejajarkan dengan jalan ---------- */
@@ -330,13 +332,14 @@ function renderDocs() {
   if (!DOCS.list.length) { el.innerHTML = ''; return; }
   el.innerHTML = DOCS.list.map(d => {
     const k = d.info.kode ? (KODE_KEL[d.info.kode] ? `${KODE_KEL[d.info.kode][1]}, ${KODE_KEL[d.info.kode][0]}` : `kode ${d.info.kode} (belum dikenal)`) : 'kode wilayah tidak terbaca dari nama file';
-    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span><button class="btn kecil nf" data-baca="${d.id}">${AI.hasil[d.id] ? 'Baca ulang' : 'Baca otomatis'}</button><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
+    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span>${d.info.jenis === 'SU' ? `<button class="btn kecil pri nf" data-digit="${d.id}" title="Baca, ambil halaman gambar, telusuri, putar ke utara, lalu cocokkan">Digitasi otomatis</button>` : ''}<button class="btn kecil nf" data-baca="${d.id}">${AI.hasil[d.id] ? 'Baca ulang' : 'Baca otomatis'}</button><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
       <div class="thumbs">${d.thumbs.map((t, i) => `<button class="thumb" data-doc="${d.id}" data-pg="${i + 1}" title="Halaman ${i + 1}"><img src="${t.url}" alt="Halaman ${i + 1}"><span>${i + 1}</span></button>`).join('')}</div>
       <div data-hasil="${d.id}">${htmlHasil(d)}</div></div>`;
   }).join('');
   el.querySelectorAll('.thumb').forEach(b => b.onclick = () => bukaPenampil(b.dataset.doc, +b.dataset.pg));
   el.querySelectorAll('[data-hapus]').forEach(b => b.onclick = () => { DOCS.list = DOCS.list.filter(d => d.id !== b.dataset.hapus); renderDocs(); });
   el.querySelectorAll('[data-baca]').forEach(b => b.onclick = () => bacaBerkas(b.dataset.baca));
+  el.querySelectorAll('[data-digit]').forEach(b => b.onclick = () => digitasiOtomatis(b.dataset.digit));
   el.querySelectorAll('[data-isi]').forEach(b => b.onclick = () => isiDariHasil(b.dataset.isi));
   el.querySelectorAll('[data-gbr]').forEach(b => b.onclick = () => { const d = DOCS.list.find(x => x.id === b.dataset.gbr); if (d) bukaPenampil(d.id, AI.hasil[d.id].gabung.halamanGambar); });
   $('btnBacaSemua').hidden = DOCS.list.length < 2;
@@ -633,7 +636,41 @@ const telusuriOtomatis = safe('Telusuri otomatis', async () => {
     onSketchChanged();
     LOG.info('Hasil telusur AI', { jalan: roads.length, titikBidang: parcel.length, panah: !!J.panah_utara, skala: J.skala });
     const pu = J.panah_utara && ke(J.panah_utara.pangkal), uu = J.panah_utara && ke(J.panah_utara.ujung);
-    if (pu && uu) selesaiPanahUtara(pu, uu);
+    if (pu && uu) await selesaiPanahUtara(pu, uu);
     toast(n ? `AI mengusulkan ${roads.length} jalan dan ${parcel.length >= 3 ? 'bidang ' + parcel.length + ' titik' : 'tanpa bidang'}${pu && uu ? ', dan memutar gambar sesuai panah utara' : ''}. Periksa dan perbaiki dengan "Ubah titik" (Ctrl+Z untuk membatalkan).` : 'AI tidak menemukan jalan atau bidang pada gambar.', n ? 'ok' : 'warn');
   } finally { AI.sibuk = false; $('btnTelusuriAI').disabled = false; $('btnTelusuriAI').textContent = 'Telusuri gambar otomatis (AI)'; }
+});
+
+/* ---------- digitasi otomatis satu tombol: baca → halaman gambar → telusuri → utara → cocokkan ---------- */
+const digitasiOtomatis = safe('Digitasi otomatis', async id => {
+  const d = DOCS.list.find(x => x.id === id); if (!d) return;
+  const t0 = performance.now(), langkah = t => { const e = document.querySelector(`[data-hasil="${id}"]`); if (e) e.innerHTML = `<p class="hint"><b>Digitasi otomatis:</b> ${t}</p>`; LOG.info('Digitasi otomatis: ' + t); };
+  LOG.info(`=== Digitasi otomatis ${d.info.label} ===`);
+  // 1. baca isian
+  if (!AI.hasil[id]) { langkah('membaca dokumen…'); await bacaBerkas(id); }
+  if (!AI.hasil[id]) throw new Error('Pembacaan dokumen gagal (lihat log). Periksa kunci API / koneksi AI.');
+  const g = AI.hasil[id].gabung;
+  isiDariHasil(id);
+  if (!getLuas()) { renderDocs(); go(2); setTimeout(() => $('inLuas').focus(), 100); throw new Error('Luas tidak terbaca dari dokumen. Isi luas dari BT/SU, lalu klik Digitasi otomatis lagi.'); }
+  // 2. halaman gambar
+  const hg = g.halamanGambar || Math.min(2, d.n);
+  langkah(`menyiapkan halaman gambar (hal. ${hg})…`);
+  VW.doc = d; VW.pg = hg; await pakaiHalaman();
+  const nama = `${d.info.label} hal ${hg}`;
+  for (let i = 0; i < 200 && !(S.img && S.img.name === nama && imgEl && imgEl.complete); i++) await sleep(50);
+  if (!S.img || S.img.name !== nama) throw new Error('Halaman gambar gagal disiapkan.');
+  // 3. telusuri + putar ke utara
+  langkah('AI menelusuri jalan, bidang, dan panah utara…');
+  await telusuriOtomatis();
+  if (!S.parcel || !S.roads.length) { renderDocs(); go(2); throw new Error('AI tidak menemukan bidang atau jalan pada gambar. Telusuri manual dengan alat Jalan dan Bidang, lalu lanjut ke Cocokkan.'); }
+  // 4. cocokkan
+  if (!S.osm) { renderDocs(); go(1); throw new Error('Data jalan wilayah belum siap. Pilih kelurahan di langkah 1, lalu lanjutkan ke Cocokkan.'); }
+  langkah('mencocokkan dengan peta…');
+  await runMatch();
+  renderDocs();
+  if (!S.cands.length) throw new Error('Pencocokan tidak menghasilkan kandidat.');
+  go(4);
+  const dt = ((performance.now() - t0) / 1000).toFixed(0);
+  LOG.info(`Digitasi otomatis selesai dalam ${dt} dtk`, { skor: +S.cands[0].r.score.toFixed(3), kandidat: S.cands.length });
+  toast(`Digitasi otomatis selesai (${dt} dtk). Periksa hasil di peta & pemeriksaan data, lalu Salin bidang untuk AutoCAD.`, 'ok');
 });
