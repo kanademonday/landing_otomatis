@@ -41,8 +41,11 @@ MIRRORS = [
 KOTA = 'rel["boundary"="administrative"]["admin_level"="5"]["name"~"Samarinda",i]->.k;'
 Q_ADMIN = f'[out:json][timeout:600];{KOTA}.k out geom;.k map_to_area->.a;rel(area.a)["boundary"="administrative"]["admin_level"~"^(6|7)$"];out geom;'
 EXCL = 'proposed|construction|abandoned|platform|raceway|bus_stop|elevator|corridor|razed|disused'
-Q_JALAN = (f'[out:json][timeout:900][maxsize:2000000000];{KOTA}.k map_to_area->.a;'
-           f'way(area.a)["highway"]["highway"!~"^({EXCL})$"]->.w;.w out body;node(w.w);out skel qt;')
+
+
+def q_jalan(s, w, n, e):
+    return (f'[out:json][timeout:240];way["highway"]["highway"!~"^({EXCL})$"]'
+            f'({s:.6f},{w:.6f},{n:.6f},{e:.6f})->.w;.w out body;node(w.w);out skel qt;')
 
 LAPORAN = []
 
@@ -52,23 +55,23 @@ def lapor(msg):
     LAPORAN.append(msg)
 
 
-def overpass(q, label):
-    for attempt in range(7):
+def overpass(q, label, putaran=6, boleh_kosong=False):
+    for attempt in range(putaran):
         for m in MIRRORS:
             t0 = time.time()
             try:
                 req = urllib.request.Request(m, data=urllib.parse.urlencode({'data': q}).encode(),
                                              headers={'User-Agent': 'landing_otomatis-data (github.com/kanademonday/landing_otomatis)'})
-                with urllib.request.urlopen(req, timeout=1000) as r:
+                with urllib.request.urlopen(req, timeout=300) as r:
                     txt = r.read()
                 j = json.loads(txt)
-                if not j.get('elements'):
+                if 'elements' not in j or (not j['elements'] and (not boleh_kosong or j.get('remark'))):
                     raise RuntimeError('respons kosong: ' + str(j.get('remark', ''))[:300])
                 lapor(f'{label}: OK dari {m} ({len(txt)/1e6:.1f} MB, {time.time()-t0:.0f} dtk, {len(j["elements"])} elemen)')
                 return j
             except Exception as e:  # noqa: BLE001
                 print(f'{label}: gagal {m}: {e}', file=sys.stderr, flush=True)
-        tunggu = min(600, 30 * 2 ** attempt)
+        tunggu = min(300, 20 * 2 ** attempt)
         print(f'{label}: semua server gagal, tunggu {tunggu} dtk', file=sys.stderr, flush=True)
         time.sleep(tunggu)
     raise SystemExit(f'{label}: gagal dari semua server Overpass')
@@ -127,6 +130,32 @@ def luas_kira(rings):
             a += (r[i][1] * k * 111.32) * (r[i + 1][0] * 110.57) - (r[i + 1][1] * k * 111.32) * (r[i][0] * 110.57)
         tot += abs(a) / 2
     return tot
+
+
+def jalan_per_petak(ja, nx=3, ny=3):
+    """Ambil jalan per petak (bbox kota dibagi nx*ny) supaya tiap permintaan kecil & cepat."""
+    lats, lons = [], []
+    for e in ja['elements']:
+        if e['type'] == 'relation' and e['tags'].get('admin_level') == '5':
+            for m in e.get('members', []):
+                for g in m.get('geometry') or []:
+                    lats.append(g['lat']); lons.append(g['lon'])
+    if not lats:
+        raise SystemExit('Batas kota Samarinda tidak ditemukan di respons Overpass')
+    s, n, w, e = min(lats) - 0.003, max(lats) + 0.003, min(lons) - 0.003, max(lons) + 0.003
+    lapor(f'BBox Samarinda: {s:.4f},{w:.4f},{n:.4f},{e:.4f} → {nx}x{ny} petak')
+    els, seen = [], set()
+    for i in range(ny):
+        for k in range(nx):
+            ps, pn = s + (n - s) * i / ny, s + (n - s) * (i + 1) / ny
+            pw, pe = w + (e - w) * k / nx, w + (e - w) * (k + 1) / nx
+            time.sleep(5)
+            j = overpass(q_jalan(ps, pw, pn, pe), f'Jalan petak {i * nx + k + 1}/{nx * ny}', putaran=8, boleh_kosong=True)
+            for el in j['elements']:
+                key = (el['type'], el['id'])
+                if key not in seen:
+                    seen.add(key); els.append(el)
+    return {'elements': els}
 
 
 def proses_admin(j):
@@ -203,8 +232,7 @@ def main():
         ja, jj = json.load(open(sys.argv[2])), json.load(open(sys.argv[3]))
     else:
         ja = overpass(Q_ADMIN, 'Batas wilayah')
-        time.sleep(20)
-        jj = overpass(Q_JALAN, 'Jalan')
+        jj = jalan_per_petak(ja)
     wil = proses_admin(ja)
     jal = proses_jalan(jj)
     meta = {'dibuat': now, 'sumber': '© OpenStreetMap contributors (ODbL)'}
