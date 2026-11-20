@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1025,6 +1025,7 @@ const loadProj = safe('Muat proyek', async file => {
 
 /* ---------- INIT ---------- */
 function init() {
+  if ($('verLink')) $('verLink').textContent = 'v' + APP_VERSION;
   LOG.info(`Aplikasi dimulai v${APP_VERSION}`, { ua: navigator.userAgent, protokol: location.protocol });
   if (!window.JSZip) LOG.warn('JSZip tidak termuat — ekspor KMZ tidak tersedia (KML tetap bisa).');
   initMap(); initSketch();

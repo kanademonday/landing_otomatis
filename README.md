@@ -8,6 +8,12 @@ Aplikasi web satu-file untuk membuat **poligon bidang tanah berkoordinat** (KML/
 
 Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya paling mirip** dengan gambar situasi (memakai data jalan OpenStreetMap), lalu menempatkan bidang tanah di sana.
 
+## Buka aplikasi
+
+- **Online (selalu versi terbaru):** https://kanademonday.github.io/landing_otomatis/ (aktif setelah GitHub Pages dinyalakan: Settings → Pages → Branch `main` / root → Save)
+- **Offline:** unduh `index.html` dan buka di Chrome/Edge.
+- **Apa yang berubah:** lihat [CHANGELOG.md](CHANGELOG.md). Nomor versi tampil di samping judul aplikasi.
+
 ## Cara pakai
 
 1. Unduh `index.html`, lalu buka dengan Chrome atau Edge (perlu internet).
