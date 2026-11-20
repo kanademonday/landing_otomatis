@@ -60,10 +60,26 @@ async def main():
     await pg.context.grant_permissions(['clipboard-read', 'clipboard-write'])
     await pg.click('#btnCopyAcad'); await pg.wait_for_timeout(200)
     clip = await pg.evaluate("navigator.clipboard.readText()")
-    lines = clip.strip().split('\n')
-    print('salin AutoCAD: baris', len(lines), '| awal', lines[:4], '| akhir', lines[-1])
-    pl = [l for l in lines[lines.index('_.PLINE')+1:] ]; pl = pl[:pl.index('_C')]
-    xy_clip = [tuple(map(float, l.split()[1].split(','))) for l in pl]
+    # validasi AutoLISP: satu baris, kurung seimbang, struktur (progn (foreach pl '(...) ...))
+    def sexp(t):
+      tok = t.replace('(', ' ( ').replace(')', ' ) ').split(); st = [[]]
+      for k in tok:
+        if k == '(': st.append([])
+        elif k == ')': x = st.pop(); st[-1].append(x)
+        else: st[-1].append(k)
+      assert len(st) == 1 and len(st[0]) == 1, 'kurung tidak seimbang'; return st[0][0]
+    import re as _re
+    tree = sexp(_re.sub(r'"[^"]*"', '"S"', clip))
+    print('salin AutoCAD (LISP): satu baris', '\n' not in clip.strip(), '| kurung seimbang & ekspresi tunggal OK | awal', clip[:60])
+    assert tree[0] == 'progn' and tree[1][0] == 'foreach'
+    quoted = clip[clip.index("'(")+1:]
+    pts = sexp(quoted[:quoted.index(') (command')+1])
+    xy_clip = [(float(p[0]), float(p[1])) for p in pts[0]]
+    await pg.select_option('#inAcadFmt', 'teks'); await pg.click('#btnCopyAcad'); await pg.wait_for_timeout(150)
+    lt = await pg.evaluate("navigator.clipboard.readText()")
+    print('format LT:', lt[:80], '... satu baris', '\n' not in lt)
+    xy_lt = [tuple(map(float, m.split(','))) for m in _re.findall(r'_non ([\d.]+,[\d.]+)', lt)]
+    assert xy_lt == xy_clip
     async with pg.expect_download() as dl: await pg.click('#btnDXF')
     d = await dl.value; fn = D + 'out_' + d.suggested_filename; await d.save_as(fn)
     xy_dxf = await pg.evaluate("(t)=>CORE.dxfPolylines(t).filter(p=>p.layer==='BIDANG')[0].pts", open(fn).read())

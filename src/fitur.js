@@ -216,14 +216,21 @@ function terapkanAdj(pts) {
 function tandaiDisesuaikan() { if (S.sel >= 0 && !S.cands[S.sel].label.includes('disesuaikan')) S.cands[S.sel].label += ' (disesuaikan)'; }
 
 /* ---------- salin ke AutoCAD (tempel di command line) ---------- */
-function perintahAcad() {
+// Satu baris AutoLISP: dibaca AutoCAD sebagai satu ekspresi (tidak terpotong per baris),
+// titik WCS dikonversi ke UCS aktif dengan (trans), "_non" mematikan OSNAP per titik.
+function poligonAcad() {
   needResult();
   const toXY = pts => pts.map(w => { const ll = PROJ.inv(w[0], w[1]); return CORE.crsFwd(SET.crs, ll[0], ll[1]); });
   const polys = [toXY(parcelWorld(S.T, $('inForce').checked))];
   for (const ex of S.extra) polys.push(toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))));
-  const L0 = ['_.UCS', '_W'];
-  for (const P of polys) { L0.push('_.PLINE'); for (const q of P) L0.push(`_non ${q[0].toFixed(3)},${q[1].toFixed(3)}`); L0.push('_C'); }
-  return L0.join('\n') + '\n';
+  return polys;
+}
+function perintahAcad() {
+  const polys = poligonAcad(), f = v => v.toFixed(3);
+  if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
+    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ') + ' ';
+  const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');
+  return `(progn (foreach pl '(${L0}) (command "_.PLINE") (foreach p pl (command "_non" (trans p 0 1))) (command "_C")) (princ "\\nPlot Bidang: ${polys.length} polyline digambar.") (princ))`;
 }
 function isiAcadTxt() { try { $('acadTxt').value = S.T && S.parcel && PROJ ? perintahAcad() : ''; } catch (e) { $('acadTxt').value = ''; } }
 const salinAcad = safe('Salin untuk AutoCAD', async () => {
@@ -234,6 +241,6 @@ const salinAcad = safe('Salin untuk AutoCAD', async () => {
     try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
   }
   const n = 1 + S.extra.length;
-  LOG.info(`Perintah AutoCAD disalin: ${n} polyline, ${CORE.CRS[SET.crs].nama}`);
-  toast(ok ? `Tersalin (${n} bidang, ${CORE.CRS[SET.crs].nama.split(' (')[0]}). Tempel di command line AutoCAD dengan Ctrl+V.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
+  LOG.info(`Perintah AutoCAD disalin (${$('inAcadFmt').value}): ${n} polyline, ${CORE.CRS[SET.crs].nama}, ${txt.length} karakter`);
+  toast(ok ? `Tersalin (${n} bidang). Di AutoCAD: Esc, klik command line, Ctrl+V, lalu Enter.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
 });

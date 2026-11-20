@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1088,6 +1088,8 @@ function init() {
   document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
   $('btnCopyAcad').onclick = salinAcad;
+  $('inAcadFmt').onchange = () => { try { localStorage.setItem('plotkw.acad', $('inAcadFmt').value); } catch (e) { /* abaikan */ } isiAcadTxt(); };
+  try { const v = localStorage.getItem('plotkw.acad'); if (v) $('inAcadFmt').value = v; } catch (e) { /* abaikan */ }
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);
   $('inOv').onchange = aturOverlay; $('inOvOpa').oninput = aturOverlay;
   document.addEventListener('keydown', e => {

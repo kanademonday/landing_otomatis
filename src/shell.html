@@ -328,12 +328,14 @@ ol.langkah li{margin:3px 0}
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
       <label class="cek" style="margin-top:10px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas BT/SU</label>
       <button class="btn pri" id="btnCopyAcad" style="width:100%;height:42px;margin-top:10px">Salin bidang untuk AutoCAD</button>
-      <ol class="langkah">
-        <li>Di AutoCAD Map 3D, klik kotak <i>command line</i> di bawah.</li>
-        <li>Tekan <b>Ctrl+V</b>. Polyline bidang langsung tergambar di koordinatnya.</li>
-        <li>Bila bidang tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter (zoom extents).</li>
-        <li>Bila yang muncul malah tulisan perintah, tekan Ctrl+Z di AutoCAD, klik dulu <i>command line</i>, lalu Ctrl+V lagi.</li>
+<ol class="langkah">
+        <li>Di AutoCAD, tekan <b>Esc</b> dua kali agar tidak ada perintah yang sedang berjalan.</li>
+        <li>Klik kotak <i>command line</i> di bagian bawah (bukan area gambar).</li>
+        <li>Tekan <b>Ctrl+V</b>, lalu <b>Enter</b>. Polyline langsung tergambar di koordinatnya.</li>
+        <li>Bila tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter.</li>
       </ol>
+      <label for="inAcadFmt">Jenis AutoCAD</label>
+      <select id="inAcadFmt"><option value="lisp">AutoCAD / Map 3D / Civil 3D (disarankan)</option><option value="teks">AutoCAD LT (tanpa AutoLISP)</option></select>
       <details><summary>Lihat isi yang disalin</summary><textarea id="acadTxt" readonly rows="8" style="height:auto;font:13px/1.4 var(--fc)"></textarea></details>
       <label for="inNama" style="margin-top:12px">Nama bidang (untuk nama file DXF)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
       <button class="btn" id="btnDXF" style="width:100%;margin-top:8px">Unduh file DXF</button>

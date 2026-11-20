@@ -2,6 +2,11 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.3.1 — 2026-11-20 — Perbaikan salin ke AutoCAD
+- **Perbaikan:** di AutoCAD Map 3D 2021, teks perintah yang ditempel hanya diproses baris pertamanya (`.PLINE`), lalu berhenti di *Specify start point*. Isi salinan kini **satu baris AutoLISP** yang diproses utuh: `(progn (foreach pl '(...) (command "_.PLINE") ...))`. Koordinat WCS dikonversi ke UCS aktif dengan `trans`, dan OSNAP dimatikan per titik dengan `_non`.
+- Pilihan **Jenis AutoCAD**: AutoCAD/Map 3D/Civil 3D (AutoLISP, disarankan) atau AutoCAD LT (satu baris perintah biasa).
+- Petunjuk diperbarui: Esc dulu, klik *command line*, Ctrl+V, lalu Enter.
+
 ## v2.3.0 — 2026-11-20 — Salin langsung ke AutoCAD
 - **Salin bidang untuk AutoCAD**: tombol utama di langkah Hasil. Menyalin perintah `PLINE` berkoordinat (TM-3 / UTM) untuk bidang dan bidang lain. Di AutoCAD Map 3D, klik *command line* lalu Ctrl+V dan polyline langsung tergambar di koordinatnya, tanpa file.
 - Unduh DXF tetap tersedia sebagai alternatif (buka/INSERT di AutoCAD, lalu *Save As* DWG).

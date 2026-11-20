@@ -328,12 +328,14 @@ ol.langkah li{margin:3px 0}
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
       <label class="cek" style="margin-top:10px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas BT/SU</label>
       <button class="btn pri" id="btnCopyAcad" style="width:100%;height:42px;margin-top:10px">Salin bidang untuk AutoCAD</button>
-      <ol class="langkah">
-        <li>Di AutoCAD Map 3D, klik kotak <i>command line</i> di bawah.</li>
-        <li>Tekan <b>Ctrl+V</b>. Polyline bidang langsung tergambar di koordinatnya.</li>
-        <li>Bila bidang tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter (zoom extents).</li>
-        <li>Bila yang muncul malah tulisan perintah, tekan Ctrl+Z di AutoCAD, klik dulu <i>command line</i>, lalu Ctrl+V lagi.</li>
+<ol class="langkah">
+        <li>Di AutoCAD, tekan <b>Esc</b> dua kali agar tidak ada perintah yang sedang berjalan.</li>
+        <li>Klik kotak <i>command line</i> di bagian bawah (bukan area gambar).</li>
+        <li>Tekan <b>Ctrl+V</b>, lalu <b>Enter</b>. Polyline langsung tergambar di koordinatnya.</li>
+        <li>Bila tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter.</li>
       </ol>
+      <label for="inAcadFmt">Jenis AutoCAD</label>
+      <select id="inAcadFmt"><option value="lisp">AutoCAD / Map 3D / Civil 3D (disarankan)</option><option value="teks">AutoCAD LT (tanpa AutoLISP)</option></select>
       <details><summary>Lihat isi yang disalin</summary><textarea id="acadTxt" readonly rows="8" style="height:auto;font:13px/1.4 var(--fc)"></textarea></details>
       <label for="inNama" style="margin-top:12px">Nama bidang (untuk nama file DXF)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
       <button class="btn" id="btnDXF" style="width:100%;margin-top:8px">Unduh file DXF</button>
@@ -984,7 +986,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2073,6 +2075,8 @@ function init() {
   document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
   $('btnCopyAcad').onclick = salinAcad;
+  $('inAcadFmt').onchange = () => { try { localStorage.setItem('plotkw.acad', $('inAcadFmt').value); } catch (e) { /* abaikan */ } isiAcadTxt(); };
+  try { const v = localStorage.getItem('plotkw.acad'); if (v) $('inAcadFmt').value = v; } catch (e) { /* abaikan */ }
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);
   $('inOv').onchange = aturOverlay; $('inOvOpa').oninput = aturOverlay;
   document.addEventListener('keydown', e => {
@@ -2302,14 +2306,21 @@ function terapkanAdj(pts) {
 function tandaiDisesuaikan() { if (S.sel >= 0 && !S.cands[S.sel].label.includes('disesuaikan')) S.cands[S.sel].label += ' (disesuaikan)'; }
 
 /* ---------- salin ke AutoCAD (tempel di command line) ---------- */
-function perintahAcad() {
+// Satu baris AutoLISP: dibaca AutoCAD sebagai satu ekspresi (tidak terpotong per baris),
+// titik WCS dikonversi ke UCS aktif dengan (trans), "_non" mematikan OSNAP per titik.
+function poligonAcad() {
   needResult();
   const toXY = pts => pts.map(w => { const ll = PROJ.inv(w[0], w[1]); return CORE.crsFwd(SET.crs, ll[0], ll[1]); });
   const polys = [toXY(parcelWorld(S.T, $('inForce').checked))];
   for (const ex of S.extra) polys.push(toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))));
-  const L0 = ['_.UCS', '_W'];
-  for (const P of polys) { L0.push('_.PLINE'); for (const q of P) L0.push(`_non ${q[0].toFixed(3)},${q[1].toFixed(3)}`); L0.push('_C'); }
-  return L0.join('\n') + '\n';
+  return polys;
+}
+function perintahAcad() {
+  const polys = poligonAcad(), f = v => v.toFixed(3);
+  if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
+    return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ') + ' ';
+  const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');
+  return `(progn (foreach pl '(${L0}) (command "_.PLINE") (foreach p pl (command "_non" (trans p 0 1))) (command "_C")) (princ "\\nPlot Bidang: ${polys.length} polyline digambar.") (princ))`;
 }
 function isiAcadTxt() { try { $('acadTxt').value = S.T && S.parcel && PROJ ? perintahAcad() : ''; } catch (e) { $('acadTxt').value = ''; } }
 const salinAcad = safe('Salin untuk AutoCAD', async () => {
@@ -2320,8 +2331,8 @@ const salinAcad = safe('Salin untuk AutoCAD', async () => {
     try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
   }
   const n = 1 + S.extra.length;
-  LOG.info(`Perintah AutoCAD disalin: ${n} polyline, ${CORE.CRS[SET.crs].nama}`);
-  toast(ok ? `Tersalin (${n} bidang, ${CORE.CRS[SET.crs].nama.split(' (')[0]}). Tempel di command line AutoCAD dengan Ctrl+V.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
+  LOG.info(`Perintah AutoCAD disalin (${$('inAcadFmt').value}): ${n} polyline, ${CORE.CRS[SET.crs].nama}, ${txt.length} karakter`);
+  toast(ok ? `Tersalin (${n} bidang). Di AutoCAD: Esc, klik command line, Ctrl+V, lalu Enter.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
 });
 
 </script>
