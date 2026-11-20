@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.4.2';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -281,7 +281,7 @@ function bidangBaru(silent) {
   S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.extra = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
   for (const id of ['inLuas', 'inNama', 'inRoadName', 'inExtraName']) $(id).value = '';
   $('qcInfo').innerHTML = ''; resetRiwayat(); aturOverlay();
-  $('inNorthMode').value = 'bebas'; S.adj = { dx: 0, dy: 0, dth: 0 }; $('fileImg').value = '';
+  $('inNorthMode').value = 'kira'; S.adj = { dx: 0, dy: 0, dth: 0 }; $('fileImg').value = '';
   if (map) { G.cand.clearLayers(); G.res.clearLayers(); G.cp.clearLayers(); }
   $('candList').innerHTML = '<div class="hint">Belum ada.</div>'; $('prog').style.width = '0'; $('progTx').textContent = '';
   $('resInfo').textContent = 'Pilih kandidat dulu di langkah 3.'; $('vtx').innerHTML = '';

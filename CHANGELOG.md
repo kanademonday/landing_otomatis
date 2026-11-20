@@ -2,6 +2,9 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.4.2 — 2026-11-20
+- Pilihan arah utara bawaan kini **"Utara di atas, kira-kira (±45°)"** (juga setelah *Bidang baru*). Teks pilihan dipendekkan.
+
 ## v2.4.1 — 2026-11-20 — Luas di AutoCAD tepat
 - **Perbaikan:** luas di AutoCAD sedikit lebih besar dari luas BT/SU (mis. 444,14 untuk 444 m²) karena faktor skala proyeksi TM-3 (±1,00018 di Samarinda). Penyamaan luas kini dilakukan langsung di koordinat TM-3/UTM yang diekspor, sehingga *Area* di AutoCAD = luas yang diisi (selisih < 0,001 m²).
 - Koordinat salinan dan DXF ditulis dengan 4 desimal (0,1 mm).
