@@ -699,7 +699,7 @@ const SKEMA_GAMBAR = {
   type: 'object',
   properties: {
     bidang: { type: 'array', items: { type: 'array', items: { type: 'number' } } },
-    jalan: { type: 'array', items: { type: 'object', properties: { nama: { type: ['string', 'null'] }, titik: { type: 'array', items: { type: 'array', items: { type: 'number' } } } }, required: ['nama', 'titik'] } },
+    jalan: { type: 'array', items: { type: 'object', properties: { nama: { type: ['string', 'null'] }, titik: { type: 'array', items: { type: 'array', items: { type: 'number' } } }, posisi_nama: { type: ['array', 'null'], items: { type: 'number' } } }, required: ['nama', 'titik', 'posisi_nama'] } },
     panah_utara: { type: ['object', 'null'], properties: { pangkal: { type: 'array', items: { type: 'number' } }, ujung: { type: 'array', items: { type: 'number' } } } },
     skala: { type: ['number', 'null'] }
   },
@@ -708,7 +708,7 @@ const SKEMA_GAMBAR = {
 const PROMPT_GAMBAR = `Ini gambar situasi bidang tanah dari surat ukur lama. KOORDINAT_INFO
 Berikan JSON:
 - bidang: titik-titik SUDUT bidang tanah UTAMA, berurutan mengelilingi bidang, sebagai [x,y]. Bidang utama adalah poligon yang sudut-sudutnya diberi nomor kecil (1, 2, 3, 4 …), sering bergaris tebal atau diwarnai/diarsir tepinya. Letakkan titik TEPAT di perpotongan garis batas pada sudut itu. Rumah/bangunan di dalam bidang (kotak kecil berarsir) BUKAN batas bidang.
-- jalan: untuk setiap jalan/gang yang tergambar sebagai dua garis sejajar, titik-titik GARIS TENGAH di antara kedua garis itu, dari ujung ke ujung (titik tambahan di tikungan), beserta namanya bila tertulis (selain itu null).
+- jalan: untuk setiap jalan/gang yang tergambar sebagai dua garis sejajar, titik-titik GARIS TENGAH di antara kedua garis itu, dari ujung ke ujung (titik tambahan di tikungan), beserta namanya bila tertulis (selain itu null) dan posisi_nama: titik tengah tulisan nama jalan itu [x,y] (null bila tidak ada tulisan).
   Tulisan seperti "Tanah Hak", "Tanah Negara", "T.N.", "Hak Milik No …", nama orang, "Parit", atau "Sungai" menandai tanah/air di sebelahnya, BUKAN jalan; jangan dimasukkan sebagai jalan.
 - panah_utara: pangkal dan ujung (mata panah, huruf U/N) panah utara, atau null bila tidak ada.
 - skala: angka N dari "Skala 1 : N", atau null.
@@ -729,10 +729,11 @@ const telusuriOtomatis = safe('Telusuri otomatis', async () => {
     const bukanJalan = n => n && !/\b(jalan|jl|jln|gang|gg|lorong|lr)\b/i.test(n);
     const dibuang = (J.jalan || []).filter(j => bukanJalan(j.nama)).map(j => j.nama);
     if (dibuang.length) LOG.info('Garis bernama bukan jalan diabaikan', dibuang);
-    const roads = (J.jalan || []).filter(j => !bukanJalan(j.nama)).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean) })).filter(r => r.pts.length >= 2);
+    const roads = (J.jalan || []).filter(j => !bukanJalan(j.nama)).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean), lbl: ke(j.posisi_nama) })).filter(r => r.pts.length >= 2);
     let parcel = (J.bidang || []).map(ke).filter(Boolean);
     if (parcel.length >= 3) parcel = await perjelasBidang(parcel);
     if (parcel.length >= 3) parcel = rapatkanBidang(parcel);
+    if (roads.length) { rapatkanJalan(roads, parcel.length >= 3 ? parcel : null); koreksiNamaJalan(roads); }
     let n = 0;
     if (roads.length) { S.roads = roads; n++; }
     if (parcel.length >= 3) { S.parcel = parcel; n++; }
@@ -892,4 +893,122 @@ async function perjelasBidang(parcel) {
     LOG.info('Bidang diperjelas dari potongan gambar', { titik: P.length, rasioLuas: +(a2 / a1).toFixed(2), geser_px: Math.round(d) });
     return P;
   } catch (e) { LOG.warn('Tahap 2 (potongan) gagal, dipakai hasil tahap 1', e.message); return parcel; }
+}
+
+/* ---------- jalan hasil AI: geser ke garis tengah di antara dua garis tepi jalan, potong ujung yang kebablasan ---------- */
+// Per ruas: cari garis-garis tinta yang sejajar dan menerus (histogram jarak tegak lurus, dengan sedikit kemiringan),
+// gabungkan garis ganda yang rapat, lalu ambil dua tepi bersebelahan selebar jalan (3–25 m) yang paling dekat dengan garis AI
+// dan bagian dalamnya bukan bidang tanah.
+function rapatkanJalan(roads, parcel) {
+  try {
+    const t0 = performance.now(), M = petaTinta(1000), L0 = getLuas();
+    const Pm = parcel ? parcel.map(p => [p[0] * M.k, p[1] * M.k]) : null;
+    let mpp = null;
+    if (Pm && L0) { const a = Math.abs(CORE.polyArea(Pm)); if (a > 50) mpp = Math.sqrt(L0 / a); }
+    const gmin = mpp ? 3 / mpp : 4, gmax = mpp ? 25 / mpp : 0.06 * Math.max(M.w, M.h), D = Math.max(gmax * 1.2, 0.03 * Math.max(M.w, M.h));
+    const tinta = (x, y) => { x = Math.round(x); y = Math.round(y); return x >= 0 && y >= 0 && x < M.w && y < M.h && M.d[y * M.w + x] < 1.01; };
+    const dalam = (x, y) => { if (!Pm) return false; let c = false; for (let i = 0, j = Pm.length - 1; i < Pm.length; j = i++) { const a = Pm[i], b = Pm[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
+    const ringkas = [];
+    for (const r of roads) {
+      const P = r.pts.map(p => [p[0] * M.k, p[1] * M.k]), segBaru = [], info = [];
+      for (let i = 0; i < P.length - 1; i++) {
+        const a = P[i], b = P[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        const ux = (b[0] - a[0]) / (len || 1), uy = (b[1] - a[1]) / (len || 1), nx = -uy, ny = ux;
+        const smp = [];
+        for (let t = 2; t < len - 1; t += 3) {
+          const x = a[0] + ux * t, y = a[1] + uy * t, gr = []; let m0 = null;
+          for (let o = -D; o <= D + 1; o++) { const ada = o <= D && tinta(x + nx * o, y + ny * o); if (ada && m0 === null) m0 = o; if (!ada && m0 !== null) { gr.push((m0 + o - 1) / 2); m0 = null; } }
+          smp.push({ t, gr });
+        }
+        if (len < 15 || smp.length < 5) { segBaru.push([a, b]); info.push(null); continue; }
+        // Hough sederhana: tiap garis tinta lurus = puncak pada (kemiringan, jarak) — garis tepi jalan boleh sedikit tidak sejajar
+        const tm = len / 2, nb = Math.ceil(D) + 2, SL = [];
+        for (let sl = -0.25; sl <= 0.2501; sl += 0.01) SL.push(+sl.toFixed(2));
+        const Hh = SL.map(sl => { const h = new Float32Array(nb); for (const q of smp) { const seen = new Set(); for (const o of q.gr) { const k = Math.round((o - sl * (q.t - tm) + D) / 2); if (k >= 0 && k < nb && !seen.has(k)) { seen.add(k); h[k]++; } } } return h; });
+        const val = (a2, k) => a2 < 0 || a2 >= SL.length || k < 0 || k >= nb ? 0 : Hh[a2][k];
+        const nil = (a2, k) => val(a2, k) + 0.5 * (val(a2, k - 1) + val(a2, k + 1));
+        const ambang = 0.4 * smp.length, garis = [];
+        for (let a2 = 0; a2 < SL.length; a2++) for (let k = 0; k < nb; k++) {
+          const v = nil(a2, k); if (v < ambang) continue;
+          let maks = true;
+          for (let da = -2; da <= 2 && maks; da++) for (let dk = -2; dk <= 2; dk++) { if (!da && !dk) continue; const w = nil(a2 + da, k + dk); if (w > v || (w === v && (da < 0 || (!da && dk < 0)))) { maks = false; break; } }
+          if (maks) garis.push({ o: k * 2 - D, sl: SL[a2], v });
+        }
+        // buang puncak kembar (garis sama, kemiringan sedikit beda)
+        garis.sort((p1, p2) => p2.v - p1.v);
+        const unik = [];
+        for (const g of garis) if (!unik.some(u => Math.abs(u.o - g.o) < 4 && Math.abs(u.sl - g.sl) < 0.04)) unik.push(g);
+        unik.sort((p1, p2) => p1.o - p2.o);
+        const gab = [];
+        for (const g of unik) { const z = gab.at(-1); if (z && g.o - z.kanan.o < gmin) z.kanan = g; else gab.push({ kiri: g, kanan: g }); }
+        // posisi tulisan nama jalan (bila AI memberikannya) menandai bagian dalam jalan
+        let olab = null;
+        if (r.lbl) { const lx = r.lbl[0] * M.k - a[0], ly = r.lbl[1] * M.k - a[1], tl = lx * ux + ly * uy; if (tl > -0.2 * len && tl < 1.2 * len) olab = lx * nx + ly * ny; }
+        const calon = [];
+        for (let k = 0; k < gab.length; k++) for (let k2 = k + 1; k2 < gab.length; k2++) {
+          const A = gab[k].kanan, B = gab[k2].kiri, g = B.o - A.o, mid = (A.o + B.o) / 2;
+          if (g < gmin || g > gmax) continue;
+          if (dalam(a[0] + ux * tm + nx * mid, a[1] + uy * tm + ny * mid)) continue; // bagian dalam bidang bukan jalan
+          calon.push({ mid, g, sl: (A.sl + B.sl) / 2, bersebelahan: k2 === k + 1, berisiNama: olab !== null && olab > A.o + 0.1 * g && olab < B.o - 0.1 * g });
+        }
+        const adaNama = calon.filter(c => c.berisiNama);
+        let pilih = null;
+        if (adaNama.length) pilih = adaNama.reduce((m, c) => Math.abs(c.mid - olab) < Math.abs(m.mid - olab) ? c : m);
+        else for (const c of calon.filter(c2 => c2.bersebelahan)) if (!pilih || Math.abs(c.mid) < Math.abs(pilih.mid)) pilih = c;
+        if (!pilih) { segBaru.push([a, b]); info.push(null); continue; }
+        const off = t => pilih.mid + pilih.sl * (t - tm);
+        segBaru.push([[a[0] + nx * off(0), a[1] + ny * off(0)], [b[0] + nx * off(len), b[1] + ny * off(len)]]);
+        info.push({ lebar_m: mpp ? +(pilih.g * mpp).toFixed(1) : null, geser_px: Math.round(Math.abs(pilih.mid) / M.k) });
+      }
+      const Q = P.map((p, i) => { const c = [segBaru[i - 1] && segBaru[i - 1][1], segBaru[i] && segBaru[i][0]].filter(Boolean); return [c.reduce((s2, q) => s2 + q[0], 0) / c.length, c.reduce((s2, q) => s2 + q[1], 0) / c.length]; });
+      r.pts = Q.map(p => [p[0] / M.k, p[1] / M.k]);
+      ringkas.push({ nama: r.name, ruas: info });
+    }
+    potongKebablasan(roads);
+    LOG.info('Jalan dirapatkan ke garis tengah gambar', { jalan: ringkas, ms: Math.round(performance.now() - t0) });
+  } catch (e) { LOG.warn('Rapatkan jalan gagal, dipakai hasil AI apa adanya', e.message); }
+}
+// Ujung jalan yang sedikit melewati jalan lain (AI sering meneruskan garis melewati simpang) dipotong di simpang itu
+function potongKebablasan(roads) {
+  const potong = (p1, p2, p3, p4) => { const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]); if (Math.abs(d) < 1e-9) return null; const t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d, u = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null; };
+  for (const r of roads) for (const ujung of ['awal', 'akhir']) {
+    const pts = ujung === 'awal' ? r.pts.slice().reverse() : r.pts, total = CORE.plLen(pts);
+    let acc = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+      for (const o of roads) { if (o === r) continue;
+        for (let j = 0; j < o.pts.length - 1; j++) {
+          const t = potong(pts[i], pts[i + 1], o.pts[j], o.pts[j + 1]); if (t === null) continue;
+          const sisa = total - (acc + t * l);
+          if (sisa > 0.02 * total && sisa < 0.22 * total) {
+            const c = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t];
+            const baru = [...pts.slice(0, i + 1), c];
+            r.pts = ujung === 'awal' ? baru.reverse() : baru;
+            LOG.info('Ujung jalan yang melewati simpang dipotong', { jalan: r.name || '(tanpa nama)', dipotong_persen: Math.round(sisa / total * 100) });
+          }
+        }
+      }
+      acc += l;
+    }
+  }
+}
+/* ---------- nama jalan hasil baca disesuaikan ke nama di peta (ejaan tulisan tangan sering meleset) ---------- */
+function miripNama(a, b) {
+  const A = CORE.normName(a).replace(/ /g, ''), B = CORE.normName(b).replace(/ /g, '');
+  if (!A || !B) return 0;
+  const m = A.length, n = B.length; let prev = Array.from({ length: n + 1 }, (_, j) => j), cur = new Array(n + 1);
+  for (let i = 1; i <= m; i++) { cur[0] = i; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1)); [prev, cur] = [cur, prev]; }
+  return 1 - prev[n] / Math.max(m, n);
+}
+function koreksiNamaJalan(roads) {
+  if (!S.osm || !S.osm.ways) return;
+  const daftar = [...new Set(S.osm.ways.flatMap(w => (w.name || '').split(' ; ')).filter(Boolean))];
+  for (const r of roads) {
+    if (!r.name || daftar.some(n => CORE.nameMatch(n, r.name))) continue;
+    const urut = daftar.map(n => [n, miripNama(r.name, n)]).sort((a, b) => b[1] - a[1]);
+    if (urut[0] && urut[0][1] >= 0.6 && (!urut[1] || urut[0][1] - urut[1][1] >= 0.08)) {
+      LOG.info('Nama jalan disesuaikan ke nama di peta', { terbaca: r.name, menjadi: urut[0][0], kemiripan: +urut[0][1].toFixed(2) });
+      r.nameAsli = r.name; r.name = urut[0][0];
+    } else LOG.info('Nama jalan tidak ada di peta wilayah ini (hanya bentuk yang dipakai)', { terbaca: r.name, terdekat: urut[0] && urut[0][0] });
+  }
 }

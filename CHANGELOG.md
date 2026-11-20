@@ -2,6 +2,13 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.10.0 — 2026-11-20 — Jalan hasil AI dirapatkan ke gambar, nama jalan disesuaikan ke peta
+- **Garis jalan dirapatkan ke gambar**: tiap ruas jalan dari AI digeser ke garis tengah di antara dua garis tepi jalan yang benar-benar tergambar (garis ganda yang rapat digabung, bagian dalam bidang tanah tidak dianggap jalan). AI kini juga memberi posisi tulisan nama jalan, yang dipakai untuk memilih pasangan tepi yang benar.
+- **Ujung jalan yang kebablasan melewati simpang dipotong** (mis. Jl. Syafi'i yang diteruskan AI melewati Jl. Sultan Alimuddin), sehingga bentuk simpang (pertigaan/perempatan) sesuai gambar.
+- **Nama jalan hasil baca disesuaikan ke nama di peta wilayah itu** bila ejaannya mirip (mis. "Sultan A. Limakulein" → "Jalan Sultan Alimuddin"); nama yang tidak ada di peta hanya dipakai bentuknya.
+- Kandidat yang nama jalannya cocok dengan peta diberi bobot lebih besar.
+- Bila luas cocok dengan skala gambar (selisih ≤10%), rentang skala pencocokan dipersempit ke ±10%.
+
 ## v2.9.0 — 2026-11-20 — Bidang hasil AI lebih tepat, peta hasil tidak lagi menampilkan seluruh dunia
 - Telusur bidang dua tahap: setelah AI menunjuk bidang pada gambar utuh, gambar dipotong dan diperbesar di sekitar bidang, lalu AI diminta menunjuk sudutnya lagi (satu panggilan Groq tambahan, tetap gratis).
 - Perapatan ke garis kini menolak garis yang terus melewati sudut (ciri garis jalan), dan jangkauan geser diperkecil, agar bidang tidak "menempel" ke garis jalan.

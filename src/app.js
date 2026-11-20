@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.9.0';
+const APP_VERSION = '2.10.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -858,7 +858,9 @@ const runMatch = safe('Pencocokan', async () => {
   if (!S.parcel) throw new Error('Gambar bidang tanah pada sketsa.');
   const L0 = getLuas(), s0 = estS0();
   if (!s0) { go(2); setTimeout(() => $('inLuas').focus(), 100); throw new Error('Isi luas tanah (m²) sesuai buku tanah / surat ukur di langkah 2.'); }
-  const v = Math.min(0.6, Math.max(0.02, (+$('inScaleVar').value || 20) / 100));
+  let v = Math.min(0.6, Math.max(0.02, (+$('inScaleVar').value || 20) / 100));
+  // gambar terbukti berskala (luas cocok dengan skala 1:N) → rentang skala dipersempit
+  if (S.parcel && typeof cekSkala === 'function') { const sk = cekSkala(Math.sqrt(getLuas() / Math.abs(CORE.polyArea(S.parcel)))); if (sk && Math.abs(sk.beda) <= 10 && v > 0.1) { v = 0.1; LOG.info('Gambar berskala (luas cocok dengan skala gambar): rentang skala dipersempit ke ±10%'); } }
   const scales = [1 - v / 2, 1, 1 + v / 2].map(k => k * s0);
   const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = (nm === 'yakin' ? 15 : 45) * DEG;
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
@@ -880,7 +882,7 @@ const runMatch = safe('Pencocokan', async () => {
       const outN = await CORE.matchAll(ctxN, opt, prog(0.5, 1, 'Dengan nama jalan: '), logf);
       for (const c of outN) list.push({ T: c.T, r: CORE.score(CTX, c.T, true), sumber: 'nama' });
       for (const c of list) { const rn = CORE.score(ctxN, c.T, true); c.nama = rn.score >= c.r.score - 0.03; }
-      list.sort((a, b) => (b.r.score + (b.nama ? 0.02 : 0)) - (a.r.score + (a.nama ? 0.02 : 0)));
+      list.sort((a, b) => (b.r.score + (b.nama ? 0.06 : 0)) - (a.r.score + (a.nama ? 0.06 : 0)));
       const anc = CTX.parcelC, uniq = [];
       for (const c of list) {
         const p = CORE.fwdT(c.T, anc[0], anc[1]);
