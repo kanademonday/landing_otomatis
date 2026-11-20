@@ -1,0 +1,17 @@
+Data dibuat: 2026-11-20 03:32 UTC
+Batas wilayah: OK dari https://overpass-api.de/api/interpreter (1.2 MB, 38 dtk, 70 elemen)
+BBox Samarinda: -0.7198,117.0510,-0.3114,117.3012 → 3x3 petak
+Jalan petak 1/9: OK dari https://overpass-api.de/api/interpreter (1.9 MB, 37 dtk, 18792 elemen)
+Jalan petak 2/9: OK dari https://overpass-api.de/api/interpreter (1.6 MB, 41 dtk, 15402 elemen)
+Jalan petak 3/9: OK dari https://overpass-api.de/api/interpreter (1.6 MB, 32 dtk, 15395 elemen)
+Jalan petak 4/9: OK dari https://overpass.kumi.systems/api/interpreter (5.6 MB, 107 dtk, 52045 elemen)
+Jalan petak 5/9: OK dari https://overpass-api.de/api/interpreter (8.5 MB, 49 dtk, 78265 elemen)
+Jalan petak 6/9: OK dari https://overpass-api.de/api/interpreter (1.9 MB, 28 dtk, 18277 elemen)
+Jalan petak 7/9: OK dari https://overpass-api.de/api/interpreter (1.9 MB, 38 dtk, 17951 elemen)
+Jalan petak 8/9: OK dari https://overpass-api.de/api/interpreter (2.9 MB, 43 dtk, 27415 elemen)
+Jalan petak 9/9: OK dari https://maps.mail.ru/osm/tools/overpass/api/interpreter (2.2 MB, 55 dtk, 21021 elemen)
+Relasi OSM: kota=True, level6=10, level7=59
+Batas kelurahan ditemukan: 59/59
+Jalan: 29523 ruas, 220115 simpul, 3058 nama jalan unik
+samarinda_wilayah.json: 0.46 MB
+samarinda_jalan.json: 3.84 MB
