@@ -8,3 +8,4 @@ node_modules/
 tests/e2e/data/
 tests/e2e/*.csv
 tests/e2e/*.dxf
+tests/e2e/pdf/

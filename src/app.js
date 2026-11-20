@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.4.2';
+const APP_VERSION = '2.5.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -279,7 +279,7 @@ const pilihDariDaftar = safe('Pilih kelurahan', async () => {
 function bidangBaru(silent) {
   if (SK.cur) SK.cur = null;
   S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.extra = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
-  for (const id of ['inLuas', 'inNama', 'inRoadName', 'inExtraName']) $(id).value = '';
+  for (const id of ['inLuas', 'inSkala', 'inNama', 'inRoadName', 'inExtraName']) $(id).value = '';
   $('qcInfo').innerHTML = ''; resetRiwayat(); aturOverlay();
   $('inNorthMode').value = 'kira'; S.adj = { dx: 0, dy: 0, dth: 0 }; $('fileImg').value = '';
   if (map) { G.cand.clearLayers(); G.res.clearLayers(); G.cp.clearLayers(); }
@@ -711,6 +711,9 @@ function renderParcelInfo() {
     const s = Math.sqrt(L0 / A);
     const sides = S.parcel.map((p, i) => { const q = S.parcel[(i + 1) % S.parcel.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]) * s; });
     h += `<br>Skala dari luas: <b>${fmt(s, 3)} m/piksel</b>.<br>Perkiraan panjang sisi: ${sides.map(v => fmt(v, 1) + ' m').join(', ')}.<div class="hint">Bandingkan dengan ukuran yang tertulis di gambar. Jika jauh berbeda, cek luas atau gambar bidang.</div>`;
+    const sk = cekSkala(s);
+    if (sk) h += `<div class="qc-${Math.abs(sk.beda) > 10 ? 'warn' : 'ok'}" style="padding:6px 10px;border-radius:6px;margin-top:6px">Menurut skala 1:${esc($('inSkala').value)}, 1 piksel = ${fmt(sk.sSk, 3)} m (selisih ${fmt(sk.beda, 1)}% dari skala luas).${Math.abs(sk.beda) > 10 ? ' Periksa luas, skala, atau gambar bidang.' : ''}</div>`;
+    else if (S.img && !S.img.dpi && $('inSkala').value) h += '<div class="hint">Skala 1:N hanya bisa diperiksa untuk gambar yang dibuka dari PDF.</div>';
   }
   el.innerHTML = h;
 }
@@ -722,10 +725,11 @@ function loadImageFile(file) {
   fr.onload = () => setImage(fr.result, file.name || 'tempelan.png');
   fr.readAsDataURL(file);
 }
-function setImage(dataURL, name, keep, fromRot) {
+function setImage(dataURL, name, keep, fromRot, meta) {
+  const dpiLama = S.img && S.img.dpi;
   const im = new Image();
   im.onload = () => {
-    imgEl = im; S.img = { dataURL, w: im.naturalWidth, h: im.naturalHeight, name };
+    imgEl = im; S.img = { dataURL, w: im.naturalWidth, h: im.naturalHeight, name, dpi: (meta && meta.dpi) || (fromRot ? dpiLama : null) || null };
     if (!fromRot) rotAsli(dataURL, im.naturalWidth, im.naturalHeight);
     if (!keep) { S.roads = []; S.parcel = null; S.cps = []; S.cands = []; S.sel = -1; S.T = null; CTX = null; SK.cur = null; }
     SK.fitted = false; skResize(); skFit(); onSketchChanged(); if (!keep || fromRot) resetRiwayat();
@@ -793,14 +797,14 @@ function initSketch() {
     S.roads = []; S.parcel = null; S.cps = []; SK.cur = null; $('skClear').dataset.arm = ''; $('skClear').textContent = '🗑 Semua';
     LOG.info('Semua gambar sketsa dihapus'); onSketchChanged();
   };
-  $('fileImg').onchange = e => loadImageFile(e.target.files[0]);
-  const drop = ev => { ev.preventDefault(); const f = ev.dataTransfer.files[0]; if (f) { loadImageFile(f); if (STEP !== 2) go(2); } };
+  $('fileImg').onchange = e => { if (e.target.files.length) bukaBerkas(e.target.files); e.target.value = ''; };
+  const drop = ev => { ev.preventDefault(); if (ev.dataTransfer.files.length) { bukaBerkas(ev.dataTransfer.files); if (STEP !== 2) go(2); } };
   for (const el of [$('drop'), SK.cv]) { el.addEventListener('dragover', e => e.preventDefault()); el.addEventListener('drop', drop); }
   document.addEventListener('paste', e => {
     const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
     if (it) { loadImageFile(it.getAsFile()); go(2); }
   });
-  $('inLuas').oninput = renderParcelInfo;
+  $('inLuas').oninput = renderParcelInfo; $('inSkala').oninput = renderParcelInfo;
   new ResizeObserver(() => { skResize(); cmpDraw(); }).observe($('skWrap'));
   new ResizeObserver(() => cmpDraw()).observe($('cmpWrap'));
 }
@@ -1058,7 +1062,7 @@ function needResult() { if (!S.T || !S.parcel || !PROJ) throw new Error('Belum a
 const saveProj = safe('Simpan proyek', async () => {
   const o = {
     app: 'pencocok-situasi-bidang', version: APP_VERSION, saved: new Date().toISOString(),
-    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
+    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, skala: $('inSkala').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
     wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, adj: S.adj, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms, nama: c.nama })), sel: S.sel, T: S.T
   };
   download(new Blob([JSON.stringify(o)], { type: 'application/json' }), baseName() + '_proyek.json');
@@ -1068,7 +1072,7 @@ const loadProj = safe('Muat proyek', async file => {
   if (o.app !== 'pencocok-situasi-bidang') throw new Error('Bukan file proyek aplikasi ini.');
   const I = o.input || {};
   if (I.kec != null) { $('inKec').value = I.kec; isiKelurahan(); if (I.kel != null) $('inKel').value = I.kel; }
-  for (const [k, id] of [['luas', 'inLuas'], ['northMode', 'inNorthMode'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
+  for (const [k, id] of [['luas', 'inLuas'], ['skala', 'inSkala'], ['northMode', 'inNorthMode'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
   $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
   S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.extra = o.extra || []; S.adj = o.adj || { dx: 0, dy: 0, dth: 0 }; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
   if (S.wil) { drawWilayah(); setProj(); $('btnJalan').disabled = false; }
@@ -1088,7 +1092,11 @@ function init() {
   $('btnCari').onclick = cariWilayah;
   isiKecamatan(); isiKelurahan();
   $('inKec').onchange = () => { isiKelurahan(); LOG.info('Kecamatan dipilih: ' + $('inKec').value); };
-  $('inKel').onchange = () => pilihDariDaftar();
+  $('inKel').onchange = () => { ingatKode(); pilihDariDaftar(); renderDocs(); };
+  $('vwTutup').onclick = () => { $('viewer').hidden = true; }; $('vwPakai').onclick = pakaiHalaman;
+  $('vwPrev').onclick = () => geserHalaman(-1); $('vwNext').onclick = () => geserHalaman(1);
+  $('vwZin').onclick = () => { VW.z = Math.min(6, VW.z * 1.4); aturZoom(); }; $('vwZout').onclick = () => { VW.z = Math.max(0.3, VW.z / 1.4); aturZoom(); };
+  document.addEventListener('keydown', e => { if (!$('viewer').hidden && e.key === 'Escape') $('viewer').hidden = true; });
   $('btnNew').onclick = () => bidangBaru(false);
   $('inFoot').onchange = () => { if (S.wil && SMD.jalan) { S.cands = []; S.sel = -1; S.T = null; terapkanJalanOffline(); } };
   initDataSamarinda();

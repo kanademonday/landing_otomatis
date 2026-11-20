@@ -17,7 +17,7 @@ Program mencari tempat di kelurahan tersebut yang **pola jalan dan simpangnya pa
 ## Cara pakai
 
 1. **Wilayah**: pilih kecamatan dan kelurahan. Batas dan jalan langsung terpasang.
-2. **Gambar**: muat surat ukur / gambar situasi / peta analog, isi **luas tanah (m²)** sesuai BT/SU, telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Putar gambar agar utara menghadap ke atas (alat *Panah utara*) dan pilih seberapa yakin arah utaranya. Bidang lain pada peta analog digambar dengan alat *Bidang lain*. Ctrl+Z untuk mengurungkan.
+2. **Gambar**: buka PDF BT/SU (kelurahan terisi dari nama file), pilih halaman gambar SU lalu *Pakai sebagai gambar situasi*; isi **luas tanah (m²)** sesuai BT/SU dan skala (mis. 1:500), telusuri jalan (alat *Jalan*) dan bidang (alat *Bidang*). Putar gambar agar utara menghadap ke atas (alat *Panah utara*) dan pilih seberapa yakin arah utaranya. Bidang lain pada peta analog digambar dengan alat *Bidang lain*. Ctrl+Z untuk mengurungkan.
 3. **Cocokkan**: lihat pratinjau tiap kandidat, pilih yang jalannya paling menempel. Bila meleset, pakai titik ikat.
 4. **Hasil**: nyalakan *Gambar situasi di peta* untuk membandingkan dengan citra satelit, lalu **Salin bidang untuk AutoCAD** dan tempel (Ctrl+V) di *command line* AutoCAD Map 3D. Polyline langsung tergambar di koordinat TM-3. Alternatifnya: **Unduh file DXF**. Penyesuaian kecil dilakukan di AutoCAD.
 
@@ -59,6 +59,7 @@ python3 tests/e2e/run2.py        # uji sumber cadangan data jalan
 python3 tests/e2e/run3.py        # uji gambar di peta, pratinjau, urungkan, ekspor DXF
 python3 tests/e2e/run4.py        # uji putar gambar, arah utara, salin ke AutoCAD vs DXF
 python3 tests/e2e/run5.py        # uji nama jalan benar vs keliru (nama sebagai petunjuk)
+python3 tests/e2e/run6.py        # uji buka PDF SU, kode wilayah, penampil, cek skala (SAMPEL=folder untuk PDF asli, tidak disimpan)
 ```
 
 ## Cara kerja singkat

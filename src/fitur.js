@@ -29,6 +29,7 @@ function cekKewajaran(r) {
   const out = [], lin = getLuas();
   const raw = S.T && S.parcel ? CORE.polyArea(parcelWorld(S.T, false)) : 0;
   const tanda = (lvl, t) => out.push(`<li class="qc-${lvl}">${t}</li>`);
+  if (lin && S.parcel) { const sk = cekSkala(Math.sqrt(lin / CORE.polyArea(S.parcel))); if (sk && Math.abs(sk.beda) > 10) tanda('warn', `Skala dari luas berbeda ${fmt(sk.beda, 1)}% dari skala 1:${esc($('inSkala').value)} pada gambar. Luas, skala, atau gambar bidang mungkin keliru.`); else if (sk) tanda('ok', `Luas cocok dengan skala 1:${esc($('inSkala').value)} pada gambar (selisih ${fmt(sk.beda, 1)}%).`); }
   if (lin) { const d = (raw / lin - 1) * 100; Math.abs(d) > 10 ? tanda('warn', `Bidang pada gambar × skala hasil cocok = ${fmt(raw, 0)} m² (selisih ${fmt(d, 1)}% dari luas yang diisi). Gambar mungkin tidak berskala, atau luasnya keliru.`) : tanda('ok', `Skala hasil cocok konsisten dengan luas (selisih ${fmt(d, 1)}%).`); }
   if (r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
@@ -247,3 +248,121 @@ const salinAcad = safe('Salin untuk AutoCAD', async () => {
   LOG.info(`Perintah AutoCAD disalin (${$('inAcadFmt').value}): ${n} polyline, ${CORE.CRS[SET.crs].nama}, ${txt.length} karakter`);
   toast(ok ? `Tersalin (${n} bidang). Di AutoCAD: Esc, klik command line, Ctrl+V, lalu Enter.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
 });
+
+/* ---------- berkas BT / SU (PDF hasil scan) — diproses hanya di browser ---------- */
+const PDFJS_URL = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.2.108/build/';
+let PDFJS = null;
+async function muatPdfjs() {
+  if (PDFJS) return PDFJS;
+  try { PDFJS = await import(PDFJS_URL + 'pdf.min.mjs'); }
+  catch (e) { LOG.error('Pembaca PDF (pdf.js) gagal dimuat', e.message); throw new Error('Pembaca PDF gagal dimuat (butuh internet). Coba muat ulang halaman.'); }
+  PDFJS.GlobalWorkerOptions.workerSrc = PDFJS_URL + 'pdf.worker.min.mjs';
+  return PDFJS;
+}
+// Kode wilayah pada nama file: 16 01 KK LL (prov, kota, kecamatan, kelurahan)
+const KODE_KEC = { '01': 'Palaran', '02': 'Samarinda Seberang', '03': 'Samarinda Ulu', '04': 'Samarinda Ilir', '05': 'Samarinda Utara', '06': 'Sungai Kunjang', '07': 'Sambutan', '08': 'Sungai Pinang', '09': 'Samarinda Kota', '10': 'Loa Janan Ilir' };
+const KODE_KEL = { '16010401': ['Samarinda Ilir', 'Selili'] };   // diketahui pasti
+try { Object.assign(KODE_KEL, JSON.parse(localStorage.getItem('plotkw.kode') || '{}')); } catch (e) { /* abaikan */ }
+function bacaNamaFile(n) {
+  const nm = n.replace(/\.[^.]+$/, '');
+  let m = nm.match(/(?:^|[^A-Za-z])(SU|GS)[_\s-]?(\d{8})[_\s-]?(\d{1,6})[_\s-]?(\d{4})(?!\d)/i);
+  if (m) return { jenis: 'SU', kode: m[2], nomor: m[3], tahun: m[4], label: `SU ${m[3]}/${m[4]}` };
+  m = nm.match(/(?:^|[^A-Za-z])BT[_\s-]?(\d{8})(\d)(\d{5})(?!\d)/i);
+  if (m) return { jenis: 'BT', kode: m[1], jenisHak: m[2], nomor: m[3], label: `BT hak ${m[3]}` + (m[2] === '1' ? ' (HM)' : '') };
+  return { jenis: '?', kode: null, label: nm.slice(0, 40) };
+}
+const DOCS = { list: [], kodeTunggu: null };
+const bukaBerkas = safe('Buka berkas', async files => {
+  const arr = [...files];
+  const gambar = arr.filter(f => /^image\//.test(f.type)), pdfs = arr.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  if (gambar.length) loadImageFile(gambar[0]);
+  if (!pdfs.length) return;
+  const lib = await muatPdfjs();
+  for (const f of pdfs) {
+    const info = bacaNamaFile(f.name);
+    const pdf = await lib.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    const d = { id: 'd' + Date.now().toString(36) + DOCS.list.length, nama: f.name, info, pdf, n: pdf.numPages, thumbs: [] };
+    DOCS.list.push(d);
+    LOG.info(`Berkas dibuka: ${info.jenis} (${pdf.numPages} hal.)`, { kode: info.kode, nomor: info.nomor, tahun: info.tahun });
+    for (let i = 1; i <= pdf.numPages; i++) d.thumbs.push(await renderHalaman(pdf, i, 150));
+    terapkanKode(info);
+  }
+  renderDocs();
+  const su = DOCS.list.filter(d => d.info.jenis === 'SU').at(-1);
+  if (su && !S.img) toast('Klik halaman gambar pada surat ukur (yang ada panah utara dan skala), lalu "Pakai sebagai gambar situasi".', 'ok');
+});
+// Render satu halaman: lebar target (px) atau dpi target ({dpi})
+async function renderHalaman(pdf, no, lebar, dpi) {
+  const pg = await pdf.getPage(no), v1 = pg.getViewport({ scale: 1 });
+  let sc = dpi ? dpi / 72 : lebar / v1.width;
+  const maks = 3600; if (v1.width * sc > maks || v1.height * sc > maks) sc = maks / Math.max(v1.width, v1.height);
+  const vp = pg.getViewport({ scale: sc }), cv = document.createElement('canvas');
+  cv.width = Math.round(vp.width); cv.height = Math.round(vp.height);
+  const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height);
+  await pg.render({ canvasContext: c, viewport: vp }).promise;
+  return { url: cv.toDataURL('image/jpeg', 0.9), w: cv.width, h: cv.height, dpi: 72 * sc };
+}
+function terapkanKode(info) {
+  if (!info.kode) return;
+  const k = KODE_KEL[info.kode];
+  if (k) {
+    if ($('inKec').value !== k[0] || $('inKel').value !== k[1]) { $('inKec').value = k[0]; isiKelurahan(); $('inKel').value = k[1]; pilihDariDaftar(); }
+  } else {
+    const kec = KODE_KEC[info.kode.slice(4, 6)];
+    if (kec && $('inKec').value !== kec) { $('inKec').value = kec; isiKelurahan(); }
+    DOCS.kodeTunggu = info.kode;
+    toast(`Kode wilayah ${info.kode} belum dikenal${kec ? ` (perkiraan Kec. ${kec})` : ''}. Pilih kelurahannya di langkah 1; aplikasi akan mengingatnya.`, 'warn');
+  }
+  if (!$('inNama').value.trim()) $('inNama').value = info.label;
+  updateKop();
+}
+function ingatKode() { // dipanggil saat kelurahan dipilih manual
+  if (!DOCS.kodeTunggu || !$('inKel').value || $('inKel').value === '*') return;
+  KODE_KEL[DOCS.kodeTunggu] = [$('inKec').value, $('inKel').value];
+  try { const L0 = JSON.parse(localStorage.getItem('plotkw.kode') || '{}'); L0[DOCS.kodeTunggu] = KODE_KEL[DOCS.kodeTunggu]; localStorage.setItem('plotkw.kode', JSON.stringify(L0)); } catch (e) { /* abaikan */ }
+  LOG.info(`Kode wilayah ${DOCS.kodeTunggu} diingat sebagai ${$('inKel').value}, ${$('inKec').value}`);
+  toast(`Kode ${DOCS.kodeTunggu} sekarang dikenal sebagai ${$('inKel').value}.`, 'ok');
+  DOCS.kodeTunggu = null;
+}
+function renderDocs() {
+  const el = $('docList'); if (!el) return;
+  if (!DOCS.list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = DOCS.list.map(d => {
+    const k = d.info.kode ? (KODE_KEL[d.info.kode] ? `${KODE_KEL[d.info.kode][1]}, ${KODE_KEL[d.info.kode][0]}` : `kode ${d.info.kode} (belum dikenal)`) : 'kode wilayah tidak terbaca dari nama file';
+    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
+      <div class="thumbs">${d.thumbs.map((t, i) => `<button class="thumb" data-doc="${d.id}" data-pg="${i + 1}" title="Halaman ${i + 1}"><img src="${t.url}" alt="Halaman ${i + 1}"><span>${i + 1}</span></button>`).join('')}</div></div>`;
+  }).join('');
+  el.querySelectorAll('.thumb').forEach(b => b.onclick = () => bukaPenampil(b.dataset.doc, +b.dataset.pg));
+  el.querySelectorAll('[data-hapus]').forEach(b => b.onclick = () => { DOCS.list = DOCS.list.filter(d => d.id !== b.dataset.hapus); renderDocs(); });
+}
+const VW = { doc: null, pg: 1, z: 1 };
+const bukaPenampil = safe('Buka halaman', async (id, pg) => {
+  const d = DOCS.list.find(x => x.id === id); if (!d) return;
+  VW.doc = d; VW.pg = pg; VW.z = 1;
+  $('vwJudul').textContent = `${d.info.label}, halaman ${pg} dari ${d.n}`;
+  $('vwImg').src = d.thumbs[pg - 1].url; $('viewer').hidden = false;
+  const hd = await renderHalaman(d.pdf, pg, null, 150); // tajam untuk dibaca
+  if (VW.doc === d && VW.pg === pg) { $('vwImg').src = hd.url; aturZoom(); }
+});
+function aturZoom() { $('vwImg').style.width = (VW.z * 100) + '%'; $('vwZ').textContent = Math.round(VW.z * 100) + '%'; }
+function geserHalaman(dt) { if (!VW.doc) return; const p = VW.pg + dt; if (p >= 1 && p <= VW.doc.n) bukaPenampil(VW.doc.id, p); }
+const pakaiHalaman = safe('Pakai halaman', async () => {
+  const d = VW.doc; if (!d) return;
+  $('vwPakai').disabled = true; $('vwPakai').textContent = 'Menyiapkan gambar…';
+  try {
+    const r = await renderHalaman(d.pdf, VW.pg, null, 200);
+    $('viewer').hidden = true;
+    setImage(r.url, `${d.info.label} hal ${VW.pg}`, false, false, { dpi: r.dpi });
+    if (d.info.jenis === 'SU' && !$('inSkala').value) $('inSkala').value = 500;
+    LOG.info(`Halaman ${VW.pg} dari ${d.info.jenis} dipakai sebagai gambar situasi`, { dpi: +r.dpi.toFixed(1), w: r.w, h: r.h });
+    toast('Gambar siap. Periksa skala (biasanya 1:500), putar agar utara di atas, lalu telusuri jalan dan bidang.', 'ok');
+    go(2);
+  } finally { $('vwPakai').disabled = false; $('vwPakai').textContent = 'Pakai sebagai gambar situasi'; }
+});
+// Pemeriksaan skala gambar (1:N) terhadap skala dari luas
+function cekSkala(sLuas) {
+  const N = parseFloat($('inSkala').value), dpi = S.img && S.img.dpi;
+  if (!N || !dpi) return null;
+  const sSk = N * 0.0254 / dpi; // meter per piksel menurut skala gambar
+  return { sSk, beda: sLuas ? (sLuas / sSk - 1) * 100 : null };
+}

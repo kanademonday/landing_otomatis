@@ -137,6 +137,21 @@ td:first-child,th:first-child{text-align:left}
 
 ol.langkah{margin:10px 0 4px;padding-left:20px;font-size:14px;color:var(--tinta2)}
 ol.langkah li{margin:3px 0}
+/* ---------- berkas BT/SU ---------- */
+.doc{border:1px solid var(--garis);border-radius:var(--r);background:var(--putih);padding:8px;margin-top:8px}
+.doc-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.doc-h .hint{margin:0;flex:1}
+.thumbs{display:flex;gap:6px;overflow-x:auto;padding-top:6px}
+.thumb{border:1px solid var(--garis);background:#fff;border-radius:4px;padding:0;cursor:pointer;position:relative;flex:none}
+.thumb img{display:block;height:92px;width:auto}
+.thumb span{position:absolute;bottom:2px;right:4px;font:600 11px var(--fc);background:rgba(255,255,255,.9);padding:0 4px;border-radius:3px}
+.thumb:hover{border-color:var(--teal)}
+.satuan .pre{position:absolute;left:12px;right:auto;top:50%;transform:translateY(-50%);color:var(--tinta2);font-weight:500}
+.viewer{position:absolute;inset:0;z-index:950;background:var(--kertas);display:flex;flex-direction:column}
+.viewer[hidden]{display:none}
+.vw-bar{display:flex;gap:6px;align-items:center;padding:8px 12px;background:var(--putih);border-bottom:1px solid var(--garis)}
+.vw-isi{flex:1;overflow:auto;padding:12px;text-align:center}
+.vw-isi img{width:100%;max-width:none;box-shadow:0 2px 12px rgba(24,48,46,.15)}
 /* ---------- gambar di peta & pratinjau kandidat ---------- */
 .ovctl{position:absolute;top:12px;left:56px;z-index:900;background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);padding:6px 12px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(24,48,46,.08)}
 .ovctl[hidden]{display:none}
@@ -245,13 +260,18 @@ ol.langkah li{margin:3px 0}
   <!-- 2. GAMBAR -->
   <div class="panel" data-panel="2">
     <header><h2>Gambar situasi</h2><p class="lead">Surat ukur, gambar situasi, atau lembar peta analog.</p></header>
-    <div class="drop" id="drop">Seret gambar ke sini, tempel (Ctrl+V), atau<br><label class="btn">Pilih gambar…<input type="file" id="fileImg" accept="image/*" hidden></label></div>
+    <div class="drop" id="drop">Seret PDF buku tanah / surat ukur atau gambar ke sini, atau<br><label class="btn">Pilih berkas…<input type="file" id="fileImg" accept="application/pdf,.pdf,image/*" multiple hidden></label>
+      <p class="hint" style="margin-bottom:0">Nama file seperti <i>SU_16010401_00001_1982.pdf</i> atau <i>BT_16010401100001.pdf</i> langsung mengisi kelurahan. Berkas hanya dibaca di browser ini.</p></div>
+    <div id="docList"></div>
 
     <section class="blok">
       <h3>Data bidang</h3>
       <label for="inLuas">Luas tanah, dalam meter persegi (m²) <span style="color:var(--merah)">wajib</span></label>
       <div class="satuan"><input type="number" id="inLuas" min="1" step="any" required placeholder="mis. 444"><span>m²</span></div>
       <p class="hint">Isi sesuai buku tanah, surat ukur, atau spreadsheet. Luas menentukan skala gambar.</p>
+      <label for="inSkala">Skala gambar pada surat ukur</label>
+      <div class="satuan"><span class="pre">1 :</span><input type="number" id="inSkala" min="1" step="any" placeholder="mis. 500" style="padding-left:40px"><span>&nbsp;</span></div>
+      <p class="hint">Untuk memeriksa luas terhadap ukuran gambar (hanya untuk halaman yang dibuka dari PDF).</p>
       <div id="parcelInfo" class="card">Bidang belum digambar.</div>
     </section>
 
@@ -366,6 +386,13 @@ ol.langkah li{margin:3px 0}
       <button id="skClear" style="color:var(--merah)">Hapus semua</button>
     </div>
     <div class="legend" id="skLegend" style="max-width:calc(100% - 380px)">Gulir untuk memperbesar. Seret dengan tombol tengah atau alat Geser.</div>
+  </div>
+  <div id="viewer" class="viewer" hidden role="dialog" aria-label="Penampil berkas">
+    <div class="vw-bar"><b id="vwJudul"></b><span class="sp"></span>
+      <button class="btn kecil" id="vwPrev" aria-label="Halaman sebelumnya">‹</button><button class="btn kecil" id="vwNext" aria-label="Halaman berikutnya">›</button>
+      <button class="btn kecil" id="vwZout" aria-label="Perkecil">−</button><span id="vwZ" class="hint" style="margin:0;min-width:44px;text-align:center">100%</span><button class="btn kecil" id="vwZin" aria-label="Perbesar">+</button>
+      <button class="btn kecil pri" id="vwPakai">Pakai sebagai gambar situasi</button><button class="btn kecil" id="vwTutup">Tutup</button></div>
+    <div class="vw-isi"><img id="vwImg" alt=""></div>
   </div>
   <div class="pane show" id="mapWrap"><div id="map"></div>
     <div class="ovctl" id="ovCtl" hidden>

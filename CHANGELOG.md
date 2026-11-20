@@ -2,6 +2,13 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.5.0 — 2026-11-20 — Buka berkas BT / SU (PDF)
+- **Buka PDF buku tanah dan surat ukur** (hasil scan) langsung di langkah 2, beberapa sekaligus. Berkas hanya dibaca di browser (pdf.js), tidak diunggah ke mana pun.
+- **Nama file dibaca otomatis**: `SU_<kode>_<nomor>_<tahun>.pdf` dan `BT_<kode><jenis><nomor>.pdf`. Kode wilayah (mis. 16010401 = Selili, Samarinda Ilir) langsung memilih kecamatan & kelurahan; nama bidang terisi (mis. "SU 00001/1982"). Kode yang belum dikenal: kecamatan diperkirakan dari kode, kelurahan dipilih sekali lalu **diingat** untuk berkas berikutnya.
+- **Pratinjau semua halaman** tiap berkas dan **penampil** (perbesar, halaman berikut/sebelumnya) untuk membaca luas, jalan, dan skala.
+- **Pakai halaman sebagai gambar situasi**: halaman gambar SU langsung menjadi gambar kerja (200 dpi), tanpa screenshot.
+- **Skala gambar 1:N** (bawaan 500 untuk SU): dengan resolusi scan, aplikasi menghitung ukuran 1 piksel di lapangan dan **membandingkannya dengan skala dari luas**. Selisih > 10% diberi tanda (luas, skala, atau gambar bidang mungkin keliru).
+
 ## v2.4.2 — 2026-11-20
 - Pilihan arah utara bawaan kini **"Utara di atas, kira-kira (±45°)"** (juga setelah *Bidang baru*). Teks pilihan dipendekkan.
 
