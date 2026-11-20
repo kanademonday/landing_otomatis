@@ -2,6 +2,11 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## Data Samarinda — 2026-11-20 (dibuat GitHub Action, ±19 menit)
+- Batas wilayah: **59/59 kelurahan** dan 10 kecamatan tersedia di OpenStreetMap.
+- Jalan: **29.523 ruas**, 220.115 titik, 3.058 nama jalan. Ukuran `samarinda_jalan.json` 3,84 MB, `samarinda_wilayah.json` 0,46 MB.
+- Uji dengan data asli: data dibaca dalam ±0,04 dtk, jalan satu kelurahan terpasang dalam <0,02 dtk, pencocokan sketsa sintetis di Selili ±0,5 dtk dengan galat 0,2–0,4 m.
+
 ## v1.1.1 — 2026-11-20
 - Log lebih rapi: file data Samarinda yang belum dibuat (404) dicatat sebagai satu peringatan, bukan 6 ERROR berisi halaman HTML.
 - Keterangan di langkah 1 menjelaskan apa yang dilakukan selama data tersimpan belum siap.
