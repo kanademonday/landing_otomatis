@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '2.0.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -97,7 +97,7 @@ const S = {
   osm: null,          // {nodes:{id:[lat,lon]}, ways:[{id,name,hw,nodes}]}
   proj0: null,        // {lat0,lon0}
   img: null,          // {dataURL,w,h,name}
-  roads: [], parcel: null, cps: [],
+  roads: [], parcel: null, cps: [], extra: [],
   cands: [], sel: -1, T: null,
   aiBackup: null, mapMode: null, cpIdx: 0
 };
@@ -111,6 +111,7 @@ function stateSummary() {
     gambar: S.img ? { nama: S.img.name, w: S.img.w, h: S.img.h } : null,
     sketsa: { jalan: S.roads.map(r => ({ nama: r.name, titik: r.pts.length })), bidang_titik: S.parcel ? S.parcel.length : 0, titik_ikat: S.cps.length },
     kandidat: S.cands.map(c => ({ label: c.label, skor: c.r ? +c.r.score.toFixed(3) : null, th: +(c.T.th / DEG).toFixed(2), s: +c.T.s.toFixed(4) })),
+    daftar: { jumlah: Q.items.length, aktif: Q.aktif, selesai: Q.items.filter(x => x.status !== 'belum').length }, referensi: REF.polys.length, bidangTambahan: S.extra.length, crs: SET.crs,
     terpilih: S.sel, T: S.T ? { s: S.T.s, th_deg: S.T.th / DEG, tx: S.T.tx, ty: S.T.ty } : null
   };
   return JSON.stringify(o, null, 1);
@@ -138,8 +139,8 @@ function initMap() {
   base['Satelit (Esri)'].addTo(map);
   const labels = mk('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', 'Label');
   labels.addTo(map);
-  for (const k of ['bnd', 'osm', 'cand', 'res', 'cp']) G[k] = L.layerGroup().addTo(map);
-  L.control.layers(base, { 'Label tempat': labels, 'Batas wilayah': G.bnd, 'Jalan OSM': G.osm, 'Kandidat': G.cand, 'Hasil': G.res, 'Titik ikat': G.cp }).addTo(map);
+  for (const k of ['bnd', 'osm', 'ref', 'cand', 'res', 'cp']) G[k] = L.layerGroup().addTo(map);
+  L.control.layers(base, { 'Label tempat': labels, 'Batas wilayah': G.bnd, 'Jalan OSM': G.osm, 'Bidang referensi & hasil': G.ref, 'Kandidat': G.cand, 'Hasil': G.res, 'Titik ikat': G.cp }).addTo(map);
   L.control.scale({ imperial: false }).addTo(map);
   map.on('click', e => onMapClick(e));
 }
@@ -154,6 +155,7 @@ function go(n) {
   $('skWrap').classList.toggle('show', n === 2);
   $('cmpWrap').classList.toggle('show', n === 4);
   if (n === 3) renderReady();
+  if (typeof updateKop === 'function') updateKop();
   setTimeout(() => { map && map.invalidateSize(); skResize(); cmpDraw(); }, 60);
   LOG.info('Pindah ke langkah ' + n);
 }
@@ -209,11 +211,12 @@ function subsetJalan(bb) {
 }
 function renderDataInfo() {
   const st = SMD.status, nKel = SMD.wil ? SMD.wil.kecamatan.reduce((a, k) => a + k.kelurahan.filter(l => l.rings).length, 0) : 0;
-  const f = s => s === 'siap' ? '✅' : s === 'memuat' ? '⏳' : '⚠️';
-  $('dataInfo').innerHTML = `${f(st.wil)} Batas wilayah: ${st.wil === 'siap' ? nKel + '/59 kelurahan' : st.wil}<br>` +
-    `${f(st.jalan)} Jalan seluruh Samarinda: ${st.jalan === 'siap' ? SMD.jalan.ways.length.toLocaleString('id') + ' ruas' : st.jalan}` +
-    (SMD.jalan && SMD.jalan.dibuat ? `<br><span class="hint">Data OSM per ${esc(SMD.jalan.dibuat)}</span>` : '') +
-    (st.jalan === 'tidak tersedia' ? '<br><span class="hint">Data tersimpan sedang disiapkan oleh GitHub Action. Sementara ini: pilih kelurahan (batas dicari via internet), lalu klik <b>Ambil ulang dari internet</b>.</span>' : '');
+  const cls = s => s === 'siap' ? 'qc-ok' : s === 'memuat' ? 'qc-info' : 'qc-warn';
+  $('dataInfo').innerHTML = `<ul class="qc">` +
+    `<li class="${cls(st.wil)}">Batas wilayah: ${st.wil === 'siap' ? nKel + ' dari 59 kelurahan' : st.wil === 'memuat' ? 'sedang dimuat' : st.wil}</li>` +
+    `<li class="${cls(st.jalan)}">Jalan seluruh Samarinda: ${st.jalan === 'siap' ? SMD.jalan.ways.length.toLocaleString('id') + ' ruas' : st.jalan === 'memuat' ? 'sedang dimuat' : st.jalan}</li></ul>` +
+    (SMD.jalan && SMD.jalan.dibuat ? `<p class="hint">Data OpenStreetMap per ${esc(SMD.jalan.dibuat)}.</p>` : '') +
+    (st.jalan === 'tidak tersedia' ? '<p class="hint">Data tersimpan belum tersedia. Pilih kelurahan, lalu buka "Ambil ulang jalan dari internet" di bawah.</p>' : '');
 }
 async function initDataSamarinda() {
   renderDataInfo();
@@ -229,11 +232,11 @@ async function initDataSamarinda() {
   if (SMD.jalan && S.wil && !S.osm) terapkanJalanOffline();
 }
 function isiKecamatan() {
-  $('inKec').innerHTML = '<option value="">— pilih kecamatan —</option>' + SAMARINDA.map(k => `<option>${esc(k[0])}</option>`).join('');
+  $('inKec').innerHTML = '<option value="">Kecamatan…</option>' + SAMARINDA.map(k => `<option>${esc(k[0])}</option>`).join('');
 }
 function isiKelurahan() {
   const k = SAMARINDA.find(x => x[0] === $('inKec').value);
-  $('inKel').innerHTML = k ? `<option value="">— pilih kelurahan —</option>` + k[1].map(n => `<option>${esc(n)}</option>`).join('') + `<option value="*">(seluruh Kec. ${esc(k[0])})</option>` : '<option value="">— pilih kecamatan dulu —</option>';
+  $('inKel').innerHTML = k ? `<option value="">Kelurahan…</option>` + k[1].map(n => `<option>${esc(n)}</option>`).join('') + `<option value="*">(seluruh Kec. ${esc(k[0])})</option>` : '<option value="">Kelurahan…</option>';
 }
 function cariRingDaftar(kec, kel) {
   if (!SMD.wil) return null;
@@ -264,25 +267,29 @@ const pilihDariDaftar = safe('Pilih kelurahan', async () => {
     if (kel === '*' && /Palaran/.test(kec)) toast('Kecamatan Palaran sangat luas — pencocokan bisa lebih lambat.', 'warn');
   } else {
     LOG.info('Batas tidak tersedia di data tersimpan → cari via Nominatim', { kec, kel, dataWilayah: SMD.status.wil });
-    if (SMD.status.wil === 'memuat') { $('dataInfo').innerHTML += '<br>⏳ Menunggu data batas…'; return; }
+    if (SMD.status.wil === 'memuat') { $('dataInfo').insertAdjacentHTML('beforeend', '<p class="hint">Menunggu data batas selesai dimuat…</p>'); return; }
     await cariWilayah();
     if (!S.wil) return;
   }
   if (!terapkanJalanOffline()) {
-    if (SMD.status.jalan === 'memuat') $('jalanInfo').textContent = '⏳ Data jalan Samarinda masih dimuat, akan dipakai otomatis…';
+    if (SMD.status.jalan === 'memuat') $('jalanInfo').textContent = 'Data jalan Samarinda masih dimuat dan akan dipakai otomatis.';
     else $('jalanInfo').innerHTML = 'Data jalan tersimpan tidak tersedia. Klik <b>Ambil ulang dari internet</b>.';
   }
 });
-function bidangBaru() {
+function bidangBaru(silent) {
   if (SK.cur) SK.cur = null;
-  S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
-  for (const id of ['inLuas', 'inLebar', 'inNama', 'inRoadName']) $(id).value = '';
+  S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.extra = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
+  for (const id of ['inLuas', 'inLuasBT', 'inLebar', 'inNama', 'inRoadName', 'inExtraName', 'inCatatan']) $(id).value = '';
+  $('inStatus').value = 'ditemukan'; $('btnLanjut').hidden = true; $('qcInfo').innerHTML = '';
+  if (!silent) { Q.aktif = -1; simpanQ(); renderDaftar(); }
+  drawReferensi();
   $('inNorth').checked = false; $('inNorthDeg').value = 0; $('fileImg').value = '';
   if (map) { G.cand.clearLayers(); G.res.clearLayers(); G.cp.clearLayers(); }
   $('candList').innerHTML = '<div class="hint">Belum ada.</div>'; $('prog').style.width = '0'; $('progTx').textContent = '';
   $('resInfo').textContent = 'Pilih kandidat dulu di langkah 3.'; $('vtx').innerHTML = '';
   onSketchChanged(); markDone();
   LOG.info('=== Bidang baru (wilayah & data jalan dipertahankan) ===');
+  if (silent) return;
   go(S.osm ? 2 : 1);
   toast(S.osm ? 'Siap untuk bidang berikutnya. Muat gambar situasi baru.' : 'Bidang baru. Pilih kelurahan dulu.', 'ok');
 }
@@ -489,7 +496,7 @@ function terimaJalan(D) {
   const nodes = D.nodes; let km = 0;
   for (const w of D.ways) for (let i = 1; i < w.nodes.length; i++) { const a = nodes[w.nodes[i - 1]], c = nodes[w.nodes[i]]; if (a && c) { const p = PROJ.fwd(a[0], a[1]), r = PROJ.fwd(c[0], c[1]); km += Math.hypot(p[0] - r[0], p[1] - r[1]) / 1000; } }
   const named = D.ways.filter(w => w.name).length;
-  $('jalanInfo').innerHTML = `✅ <b>${D.ways.length.toLocaleString('id')}</b> ruas jalan, total ±${km.toFixed(1)} km, ${named.toLocaleString('id')} ruas bernama.<br><span class="hint">Sumber: ${esc(D.src)}. Lanjut ke langkah 2.</span>`;
+  $('jalanInfo').innerHTML = `<b>${D.ways.length.toLocaleString('id')}</b> ruas jalan, total ±${km.toFixed(1)} km, ${named.toLocaleString('id')} ruas bernama.<br><span class="hint">Sumber: ${esc(D.src)}. Lanjut ke langkah 2.</span>`;
   LOG.info('Data jalan dimuat dari ' + D.src, { ruas: D.ways.length, node: Object.keys(nodes).length, km: +km.toFixed(2), bernama: named });
   toast('Data jalan berhasil dimuat (' + D.src + ').', 'ok'); markDone();
 }
@@ -515,7 +522,7 @@ const ambilJalan = safe('Ambil data jalan', async () => {
         D = await viaOverpass(bb, wait === 10 ? 2 : 3); if (D) break;
       }
     }
-    if (!D) { jalanStatus('❌ Gagal dari semua sumber. Coba lagi nanti, atau pakai "Impor file data jalan" di bawah.'); throw new Error('Semua sumber data jalan gagal (server sibuk). Coba lagi beberapa menit lagi atau impor file.'); }
+    if (!D) { jalanStatus('Gagal dari semua sumber. Coba lagi nanti, atau pakai "Impor file data jalan" di bawah.'); throw new Error('Semua sumber data jalan gagal (server sibuk). Coba lagi beberapa menit lagi atau impor file.'); }
     terimaJalan(D);
   } finally { $('btnJalan').disabled = false; }
 });
@@ -561,7 +568,7 @@ function skDraw() {
   const c = SK.ctx; if (!c) return;
   const W = SK.cv.width / SK.dpr, H = SK.cv.height / SK.dpr;
   c.setTransform(SK.dpr, 0, 0, SK.dpr, 0, 0); c.clearRect(0, 0, W, H);
-  if (!S.img || !imgEl) { c.fillStyle = '#94a3b8'; c.font = '16px system-ui'; c.textAlign = 'center'; c.fillText('Muat gambar situasi (panel kiri) — atau tempel (Ctrl+V) / seret ke sini', W / 2, H / 2); return; }
+  if (!S.img || !imgEl) { c.fillStyle = '#4C605D'; c.font = '500 16px Barlow, system-ui'; c.textAlign = 'center'; c.fillText('Muat gambar situasi dari panel kiri, tempel dengan Ctrl+V, atau seret ke sini.', W / 2, H / 2); return; }
   c.drawImage(imgEl, SK.view.ox, SK.view.oy, S.img.w * SK.view.s, S.img.h * SK.view.s);
   const line = (pts, col, w, close, dash) => {
     if (pts.length < 1) return; c.beginPath(); pts.forEach((p, i) => { const q = toScr(p); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); });
@@ -572,6 +579,12 @@ function skDraw() {
     c.beginPath(); S.parcel.forEach((p, i) => { const q = toScr(p); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.closePath();
     c.fillStyle = 'rgba(168,85,247,.35)'; c.fill(); line(S.parcel, '#a855f7', 3, true); dots(S.parcel, '#a855f7');
   }
+  S.extra.forEach((ex, i) => {
+    c.beginPath(); ex.pts.forEach((p, k) => { const q = toScr(p); k ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); c.closePath();
+    c.fillStyle = 'rgba(214,120,36,.25)'; c.fill(); line(ex.pts, '#c8641a', 2.5, true, [6, 3]); dots(ex.pts, '#c8641a', 3);
+    const q = toScr(CORE.centroid(ex.pts)); c.font = '600 12px Barlow, system-ui'; c.textAlign = 'center';
+    const t = ex.label || 'Bidang +' + (i + 1); c.lineWidth = 3; c.strokeStyle = '#fff'; c.strokeText(t, q[0], q[1]); c.fillStyle = '#7a3a0c'; c.fillText(t, q[0], q[1]);
+  });
   S.roads.forEach((r, i) => {
     line(r.pts, 'rgba(0,0,0,.6)', 6); line(r.pts, '#ef4444', 3); dots(r.pts, '#fff', 3);
     const m = CORE.plPointAt(r.pts, CORE.plLen(r.pts) / 2), q = toScr(m);
@@ -591,7 +604,7 @@ function skDraw() {
 function snapPt(p) {
   const tv = 10 / SK.view.s, ts = 8 / SK.view.s;
   let best = null, bd = tv;
-  const cands = []; S.roads.forEach(r => cands.push(...r.pts)); if (S.parcel) cands.push(...S.parcel);
+  const cands = []; S.roads.forEach(r => cands.push(...r.pts)); if (S.parcel) cands.push(...S.parcel); S.extra.forEach(e => cands.push(...e.pts));
   if (SK.cur && SK.cur.pts.length) cands.push(SK.cur.pts[0]);
   for (const q of cands) { const d = Math.hypot(q[0] - p[0], q[1] - p[1]); if (d < bd) { bd = d; best = q.slice(); } }
   if (best) return best;
@@ -606,24 +619,26 @@ function hitVertex(x, y) {
   const t = 9;
   for (let i = 0; i < S.cps.length; i++) { const q = toScr(S.cps[i].img); if (Math.hypot(q[0] - x, q[1] - y) < t) return { k: 'cp', i }; }
   if (S.parcel) for (let j = 0; j < S.parcel.length; j++) { const q = toScr(S.parcel[j]); if (Math.hypot(q[0] - x, q[1] - y) < t) return { k: 'parcel', j }; }
+  for (let i = 0; i < S.extra.length; i++) for (let j = 0; j < S.extra[i].pts.length; j++) { const q = toScr(S.extra[i].pts[j]); if (Math.hypot(q[0] - x, q[1] - y) < t) return { k: 'extra', i, j }; }
   for (let i = 0; i < S.roads.length; i++) for (let j = 0; j < S.roads[i].pts.length; j++) { const q = toScr(S.roads[i].pts[j]); if (Math.hypot(q[0] - x, q[1] - y) < t) return { k: 'road', i, j }; }
   return null;
 }
-function setVertex(h, p) { if (h.k === 'cp') S.cps[h.i].img = p; else if (h.k === 'parcel') S.parcel[h.j] = p; else S.roads[h.i].pts[h.j] = p; }
+function setVertex(h, p) { if (h.k === 'cp') S.cps[h.i].img = p; else if (h.k === 'parcel') S.parcel[h.j] = p; else if (h.k === 'extra') S.extra[h.i].pts[h.j] = p; else S.roads[h.i].pts[h.j] = p; }
 function delVertex(h) {
   if (h.k === 'cp') { S.cps.splice(h.i, 1); }
   else if (h.k === 'parcel') { S.parcel.splice(h.j, 1); if (S.parcel.length < 3) S.parcel = null; }
+  else if (h.k === 'extra') { S.extra[h.i].pts.splice(h.j, 1); if (S.extra[h.i].pts.length < 3) S.extra.splice(h.i, 1); }
   else { S.roads[h.i].pts.splice(h.j, 1); if (S.roads[h.i].pts.length < 2) S.roads.splice(h.i, 1); }
   onSketchChanged();
 }
 function skClick(x, y) {
   if (!S.img) return;
   let p = toImg(x, y);
-  if (SK.tool === 'road' || SK.tool === 'parcel') {
+  if (SK.tool === 'road' || SK.tool === 'parcel' || SK.tool === 'parcel2') {
     if (!SK.cur || SK.cur.type !== SK.tool) SK.cur = { type: SK.tool, pts: [] };
     const pts = SK.cur.pts;
     if (pts.length) { const q = toScr(pts[pts.length - 1]); if (Math.hypot(q[0] - x, q[1] - y) < 4) return; }
-    if (SK.tool === 'parcel' && pts.length >= 3) { const q = toScr(pts[0]); if (Math.hypot(q[0] - x, q[1] - y) < 10) { skFinish(); return; } }
+    if (SK.tool !== 'road' && pts.length >= 3) { const q = toScr(pts[0]); if (Math.hypot(q[0] - x, q[1] - y) < 10) { skFinish(); return; } }
     p = snapPt(p); pts.push(p); skDraw();
   } else if (SK.tool === 'cp') {
     S.cps.push({ img: p, ll: null }); LOG.info('Titik ikat #' + S.cps.length + ' ditambahkan di sketsa', p.map(v => +v.toFixed(1))); onSketchChanged();
@@ -635,6 +650,9 @@ function skFinish() {
   if (c.type === 'road') {
     if (c.pts.length >= 2) { S.roads.push({ name: $('inRoadName').value.trim(), pts: c.pts }); $('inRoadName').value = ''; LOG.info('Jalan sketsa ditambahkan', { no: S.roads.length, titik: c.pts.length, nama: S.roads[S.roads.length - 1].name }); }
     else toast('Garis jalan perlu minimal 2 titik.', 'warn');
+  } else if (c.type === 'parcel2') {
+    if (c.pts.length >= 3) { S.extra.push({ pts: c.pts, label: $('inExtraName').value.trim() }); $('inExtraName').value = ''; LOG.info('Bidang tambahan digambar', { no: S.extra.length, titik: c.pts.length }); }
+    else toast('Bidang perlu minimal 3 titik.', 'warn');
   } else if (c.type === 'parcel') {
     if (c.pts.length >= 3) { S.parcel = c.pts; LOG.info('Bidang digambar', { titik: c.pts.length }); }
     else toast('Bidang perlu minimal 3 titik.', 'warn');
@@ -651,7 +669,7 @@ function onSketchChanged() {
       SK.junc = CORE.sketchJunctions(S.roads.map(r => r.pts.map(p => [p[0], -p[1]])), 0.015 * diag, 0.06 * diag).map(j => [j.x, -j.y]);
     } else SK.junc = [];
   } catch (e) { LOG.error('Deteksi simpang sketsa gagal', e); SK.junc = []; }
-  renderRoadList(); renderParcelInfo(); skDraw(); markDone(); updateCpInfo();
+  renderRoadList(); renderParcelInfo(); renderExtraList(); skDraw(); markDone(); updateCpInfo(); updateKop();
   if (S.cands.length) { CTX = null; }
 }
 function renderRoadList() {
@@ -813,7 +831,7 @@ Balas HANYA JSON tanpa teks lain:
 
 /* ---------- LANGKAH 3: PENCOCOKAN ---------- */
 function renderReady() {
-  const ok = (b, t) => (b ? '✅ ' : '❌ ') + t;
+  const ok = (b, t) => `<li class="${b ? 'qc-ok' : 'qc-bad'}">${t}</li>`;
   const L0 = getLuas(), Lb = getLebar();
   const items = [
     ok(!!S.wil, 'Wilayah: ' + (S.wil ? esc(S.wil.name.split(',').slice(0, 3).join(',')) : 'belum')),
@@ -822,12 +840,12 @@ function renderReady() {
     ok(S.roads.length > 0, `Jalan di sketsa: ${S.roads.length} (simpang ${SK.junc.length})`),
     ok(!!S.parcel, 'Bidang tanah digambar'),
     ok(!!(L0 || Lb), L0 ? 'Luas: ' + fmt(L0, 0) + ' m²' : Lb ? 'Perkiraan lebar gambar: ' + Lb + ' m' : 'Luas / perkiraan lebar belum diisi'),
-    ($('inNorth').checked ? '✅ Arah utara: ' + $('inNorthDeg').value + '°' : '➖ Arah utara tidak diketahui (rotasi dicari bebas)')
+    ($('inNorth').checked ? `<li class="qc-ok">Arah utara: ${esc($('inNorthDeg').value)}°</li>` : '<li class="qc-info">Arah utara tidak diketahui, putaran dicari bebas</li>')
   ];
   let warn = '';
-  if (S.roads.length && !SK.junc.length) warn = '<br>⚠️ Sketsa tanpa simpang: hasil bisa sangat ambigu. Isi nama jalan, arah utara, atau gunakan titik ikat.';
-  else if (SK.junc.length === 1 && !$('inNorth').checked) warn = '<br>⚠️ Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
-  $('readyInfo').innerHTML = items.join('<br>') + warn;
+  if (S.roads.length && !SK.junc.length) warn = '<li class="qc-warn">Sketsa tanpa simpang: hasil bisa sangat ambigu. Isi nama jalan, arah utara, atau gunakan titik ikat.';
+  else if (SK.junc.length === 1 && !$('inNorth').checked) warn = '<li class="qc-warn">Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
+  $('readyInfo').innerHTML = '<ul class="qc">' + items.join('') + (warn ? warn + '</li>' : '') + '</ul>';
 }
 function buildCtx(s0) {
   const nodeXY = new Map();
@@ -836,6 +854,7 @@ function buildCtx(s0) {
   const ctx = CORE.prepareCtx({
     ways: S.osm.ways, nodeXY, roadsImg: S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
     s0, tau: Math.max(2, +$('inTau').value || 12), inArea: inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
+    refXY: refXY(),
     log: (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m)
   });
   LOG.info(`Konteks pencocokan siap (${Math.round(performance.now() - t0)} ms)`);
@@ -895,7 +914,7 @@ function renderCands() {
     const [t, cl] = conf(i);
     const d = document.createElement('div'); d.className = 'item' + (i === S.sel ? ' sel' : '');
     d.innerHTML = `<b>${esc(c.label)}</b> skor <b>${c.r ? (c.r.score * 100).toFixed(0) + '%' : '-'}</b> <span class="badge ${cl}">${t}</span>
-      <div class="hint">${c.r ? `titik sketsa cocok ${(c.r.within * 100).toFixed(0)}%, deviasi rata² ${fmt(c.r.dev, 1)} m, ` : ''}rotasi ${fmt(c.T.th / DEG, 1)}°, skala ${fmt(c.T.s, 3)} m/px${c.rms != null ? ', RMS titik ikat ' + fmt(c.rms, 2) + ' m' : ''}</div>`;
+      <div class="hint">${c.r ? `titik sketsa cocok ${(c.r.within * 100).toFixed(0)}%, deviasi rata² ${fmt(c.r.dev, 1)} m, ` : ''}rotasi ${fmt(c.T.th / DEG, 1)}°, skala ${fmt(c.T.s, 3)} m/px${c.r && c.r.ovl > 0.02 ? `, <b>menumpuk ${(c.r.ovl * 100).toFixed(0)}%</b> dengan bidang lain` : ''}${c.rms != null ? ', RMS titik ikat ' + fmt(c.rms, 2) + ' m' : ''}</div>`;
     d.onclick = () => selectCand(i, true);
     el.appendChild(d);
   });
@@ -984,12 +1003,12 @@ function renderResult() {
   if (map) {
     G.res.clearLayers();
     for (const rd of S.roads) L.polyline(toLL(rd.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))), { color: '#ef4444', weight: 3, dashArray: '8 6' }).bindTooltip('Jalan sketsa' + (rd.name ? ': ' + rd.name : '')).addTo(G.res);
-    L.polygon(finalLL(), { color: '#f0abfc', weight: 3, fillColor: '#a855f7', fillOpacity: 0.35 }).bindTooltip('Bidang tanah').addTo(G.res);
+    for (const ex of S.extra) L.polygon(toLL(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))), { color: '#e8892f', weight: 2, dashArray: '6 3', fillOpacity: 0.2 }).bindTooltip(ex.label || 'Bidang tambahan').addTo(G.res);
+    L.polygon(finalLL(), { color: '#ff3b30', weight: 3, fillColor: '#ff3b30', fillOpacity: 0.25 }).bindTooltip('Bidang tanah').addTo(G.res);
   }
   const raw = parcelWorld(S.T, false), fin = parcelWorld(S.T, $('inForce').checked), ll = toLL(fin);
   const L0 = getLuas(), Araw = CORE.polyArea(raw), Ageo = geoArea(ll);
-  const utm = ll.map(p => CORE.toUTM(p[0], p[1])), Autm = CORE.polyArea(utm.map(u => [u.E, u.N]));
-  const tm3 = ll.map(p => CORE.toTM3(p[0], p[1])), Atm3 = CORE.polyArea(tm3.map(u => [u.E, u.N]));
+  const xy = ll.map(p => CORE.crsFwd(SET.crs, p[0], p[1])), Axy = CORE.polyArea(xy), crsNm = CORE.CRS[SET.crs].nama.split(' (')[0];
   const sides = fin.map((p, i) => { const q = fin[(i + 1) % fin.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]); });
   const c = ll.reduce((a, p) => [a[0] + p[0] / ll.length, a[1] + p[1] / ll.length], [0, 0]);
   const cl = S.sel >= 0 ? conf(S.sel) : ['-', ''];
@@ -1001,13 +1020,13 @@ function renderResult() {
     <tr><td style="text-align:left">Input (sertifikat/keterangan)</td><td>${L0 ? fmt(L0, 0) : '-'}</td></tr>
     <tr><td style="text-align:left">Sketsa × skala hasil cocok</td><td>${fmt(Araw, 1)}${L0 ? ` (${Araw >= L0 ? '+' : ''}${fmt((Araw / L0 - 1) * 100, 1)}%)` : ''}</td></tr>
     <tr><td style="text-align:left">Poligon akhir — geodesik</td><td><b>${fmt(Ageo, 1)}</b></td></tr>
-    <tr><td style="text-align:left">Poligon akhir — bidang UTM ${utm[0].zone}</td><td>${fmt(Autm, 1)}</td></tr>
-    <tr><td style="text-align:left">Poligon akhir — TM-3 ${tm3[0].zone}</td><td>${fmt(Atm3, 1)}</td></tr></table>
+    <tr><td style="text-align:left">Poligon akhir — bidang ${crsNm}</td><td>${fmt(Axy, 1)}</td></tr></table>
     <div class="hint">Panjang sisi: ${sides.map(v => fmt(v, 2)).join(' · ')} m · keliling ${fmt(sides.reduce((a, b) => a + b, 0), 2)} m</div>`;
-  $('vtx').innerHTML = `<table><tr><th>No</th><th>Lintang</th><th>Bujur</th><th>UTM E</th><th>UTM N</th><th>TM3 X</th><th>TM3 Y</th></tr>` +
-    ll.map((p, i) => `<tr><td>${i + 1}</td><td>${p[0].toFixed(7)}</td><td>${p[1].toFixed(7)}</td><td>${utm[i].E.toFixed(2)}</td><td>${utm[i].N.toFixed(2)}</td><td>${tm3[i].E.toFixed(2)}</td><td>${tm3[i].N.toFixed(2)}</td></tr>`).join('') +
-    `</table><div class="hint">UTM zona ${utm[0].zone} (WGS84). TM-3 zona ${tm3[0].zone} (k=0,9999; FE 200.000; FN 1.500.000) — cek ulang bila dipakai untuk keperluan resmi.</div>`;
-  cmpDraw();
+  $('vtx').innerHTML = `<table><tr><th>No</th><th>Lintang</th><th>Bujur</th><th>X</th><th>Y</th></tr>` +
+    ll.map((p, i) => `<tr><td>${i + 1}</td><td>${p[0].toFixed(7)}</td><td>${p[1].toFixed(7)}</td><td>${xy[i][0].toFixed(2)}</td><td>${xy[i][1].toFixed(2)}</td></tr>`).join('') +
+    `</table><div class="hint">X/Y dalam ${esc(CORE.CRS[SET.crs].nama)}. TM-3: k=0,9999; FE 200.000; FN 1.500.000.</div>`;
+  $('qcInfo').innerHTML = cekKewajaran(r);
+  cmpDraw(); updateKop();
 }
 function adjust(kind) {
   if (!S.T) { toast('Pilih kandidat dulu.', 'warn'); return; }
@@ -1026,13 +1045,13 @@ function cmpDraw() {
   const r = cv.parentElement.getBoundingClientRect(); if (!r.width) return;
   const dpr = devicePixelRatio || 1; cv.width = r.width * dpr; cv.height = r.height * dpr;
   const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const W = r.width, H = r.height; c.fillStyle = '#0b1220'; c.fillRect(0, 0, W, H);
-  if (!S.img || !imgEl) { c.fillStyle = '#94a3b8'; c.font = '15px system-ui'; c.textAlign = 'center'; c.fillText('Belum ada gambar.', W / 2, H / 2); return; }
+  const W = r.width, H = r.height; c.fillStyle = '#e6eae6'; c.fillRect(0, 0, W, H);
+  if (!S.img || !imgEl) { c.fillStyle = '#4C605D'; c.font = '500 15px Barlow, system-ui'; c.textAlign = 'center'; c.fillText('Belum ada gambar. Muat gambar di langkah 2.', W / 2, H / 2); return; }
   // muat seluruh gambar + sedikit margin
   const s = Math.min(W / S.img.w, (H - 48) / S.img.h) * 0.92, ox = (W - S.img.w * s) / 2, oy = 48 + (H - 48 - S.img.h * s) / 2;
   const P = p => [p[0] * s + ox, p[1] * s + oy];
-  c.fillStyle = '#e5e7eb'; c.font = 'bold 13px system-ui'; c.textAlign = 'left';
-  c.fillText('PERBANDINGAN: gambar situasi vs jalan sebenarnya (OSM) di posisi hasil', 10, 18);
+  c.fillStyle = '#18302E'; c.font = '600 14px Barlow, system-ui'; c.textAlign = 'left';
+  c.fillText('Gambar situasi di atas jalan nyata, pada posisi hasil', 12, 20);
   c.globalAlpha = (+$('inOpa').value) / 100; c.drawImage(imgEl, ox, oy, S.img.w * s, S.img.h * s); c.globalAlpha = 1;
   const path = (pts, close) => { c.beginPath(); pts.forEach((p, i) => { const q = P(p); i ? c.lineTo(q[0], q[1]) : c.moveTo(q[0], q[1]); }); if (close) c.closePath(); };
   if (S.T && S.osm && PROJ) {
@@ -1042,16 +1061,17 @@ function cmpDraw() {
     for (const w of S.osm.ways) {
       const pts = w.nodes.map(id => S.osm.nodes[id]).filter(Boolean).map(p => toIm(p[0], p[1]));
       if (pts.length < 2 || pts.every(p => p[0] < -pad || p[1] < -pad || p[0] > S.img.w + pad || p[1] > S.img.h + pad)) continue;
-      path(pts); c.strokeStyle = 'rgba(0,0,0,.6)'; c.lineWidth = 6; c.stroke(); c.strokeStyle = '#22d3ee'; c.lineWidth = 3; c.stroke();
+      path(pts); c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 6; c.stroke(); c.strokeStyle = '#0e8fb3'; c.lineWidth = 3; c.stroke();
     }
     const fin = parcelWorld(S.T, $('inForce').checked).map(w => { const m = CORE.invT(S.T, w[0], w[1]); return [m[0], -m[1]]; });
     path(fin, true); c.fillStyle = 'rgba(168,85,247,.35)'; c.fill(); c.strokeStyle = '#a855f7'; c.lineWidth = 3; c.stroke();
     c.restore();
   }
+  for (const ex of S.extra) { path(ex.pts, true); c.fillStyle = 'rgba(232,137,47,.25)'; c.fill(); c.strokeStyle = '#c8641a'; c.lineWidth = 2; c.stroke(); }
   for (const rd of S.roads) { path(rd.pts); c.setLineDash([8, 6]); c.strokeStyle = '#ef4444'; c.lineWidth = 2.5; c.stroke(); c.setLineDash([]); }
   if (S.T && S.sel >= 0) {
     const rr = S.cands[S.sel].rNow || S.cands[S.sel].r;
-    if (rr) { c.fillStyle = '#facc15'; c.font = 'bold 13px system-ui'; c.textAlign = 'left'; c.fillText(`Skor ${(rr.score * 100).toFixed(1)}% · deviasi rata² ${fmt(rr.dev, 1)} m`, 10, 36); }
+    if (rr) { c.fillStyle = '#1F5E5B'; c.font = '500 13px Barlow, system-ui'; c.textAlign = 'left'; c.fillText(`Skor ${(rr.score * 100).toFixed(1)}%, deviasi rata-rata ${fmt(rr.dev, 1)} m`, 12, 38); }
   }
 }
 
@@ -1096,6 +1116,9 @@ ${verts}
 <Folder><name>Jalan dari sketsa</name>
 ${roads}
 </Folder>
+<Folder><name>Bidang tambahan</name>
+${S.extra.map((ex, i) => { const l2 = toLL(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))); return `<Placemark><name>${xmlEsc(ex.label || 'Bidang tambahan ' + (i + 1))}</name><Style><LineStyle><color>ff2f89e8</color><width>2</width></LineStyle><PolyStyle><color>332f89e8</color></PolyStyle></Style><Polygon><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>${l2.concat([l2[0]]).map(p => `${p[1].toFixed(8)},${p[0].toFixed(8)},0`).join(' ')}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`; }).join('\n')}
+</Folder>
 ${overlay}
 </Document>
 </kml>`;
@@ -1113,13 +1136,16 @@ const expGeo = safe('Ekspor GeoJSON', async () => {
   needResult(); const ll = finalLL();
   const fc = { type: 'FeatureCollection', features: [
     { type: 'Feature', properties: { nama: $('inNama').value || 'Bidang', luas_input_m2: getLuas(), luas_geodesik_m2: +geoArea(ll).toFixed(2) }, geometry: { type: 'Polygon', coordinates: [ll.concat([ll[0]]).map(p => [+p[1].toFixed(8), +p[0].toFixed(8)])] } },
+    ...S.extra.map((ex, i) => { const l2 = toLL(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))); return { type: 'Feature', properties: { jenis: 'bidang_tambahan', nama: ex.label || 'Bidang tambahan ' + (i + 1), luas_geodesik_m2: +geoArea(l2).toFixed(2) }, geometry: { type: 'Polygon', coordinates: [l2.concat([l2[0]]).map(p => [+p[1].toFixed(8), +p[0].toFixed(8)])] } }; }),
     ...S.roads.map((rd, i) => ({ type: 'Feature', properties: { jenis: 'jalan_sketsa', nama: rd.name || 'Jalan ' + (i + 1) }, geometry: { type: 'LineString', coordinates: toLL(rd.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))).map(p => [+p[1].toFixed(8), +p[0].toFixed(8)]) } }))] };
   download(new Blob([JSON.stringify(fc, null, 1)], { type: 'application/geo+json' }), baseName() + '.geojson');
 });
 const expCSV = safe('Ekspor CSV', async () => {
   needResult(); const ll = finalLL();
-  const rows = ['No,Lintang,Bujur,UTM_Zona,UTM_E,UTM_N,TM3_Zona,TM3_X,TM3_Y'];
-  ll.forEach((p, i) => { const u = CORE.toUTM(p[0], p[1]), t = CORE.toTM3(p[0], p[1]); rows.push([i + 1, p[0].toFixed(8), p[1].toFixed(8), u.zone, u.E.toFixed(3), u.N.toFixed(3), t.zone, t.E.toFixed(3), t.N.toFixed(3)].join(',')); });
+  const rows = ['Bidang;No;Lintang;Bujur;X;Y;Sistem'];
+  const tulis = (nm, L2) => L2.forEach((p, i) => { const q = CORE.crsFwd(SET.crs, p[0], p[1]); rows.push([nm, i + 1, p[0].toFixed(8), p[1].toFixed(8), q[0].toFixed(3), q[1].toFixed(3), SET.crs].join(';')); });
+  tulis($('inNama').value.trim() || 'Bidang', ll);
+  S.extra.forEach((ex, i) => tulis(ex.label || 'Bidang tambahan ' + (i + 1), toLL(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1])))));
   download(new Blob(['﻿' + rows.join('\r\n')], { type: 'text/csv' }), baseName() + '_koordinat.csv');
 });
 const expPNG = safe('Ekspor PNG', async () => {
@@ -1132,7 +1158,7 @@ const saveProj = safe('Simpan proyek', async () => {
   const o = {
     app: 'pencocok-situasi-bidang', version: APP_VERSION, saved: new Date().toISOString(),
     input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, lebar: $('inLebar').value, north: $('inNorth').checked, northDeg: $('inNorthDeg').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
-    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms })), sel: S.sel, T: S.T
+    wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, luasBT: $('inLuasBT').value, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms })), sel: S.sel, T: S.T
   };
   download(new Blob([JSON.stringify(o)], { type: 'application/json' }), baseName() + '_proyek.json');
 });
@@ -1143,9 +1169,9 @@ const loadProj = safe('Muat proyek', async file => {
   if (I.kec != null) { $('inKec').value = I.kec; isiKelurahan(); if (I.kel != null) $('inKel').value = I.kel; }
   for (const [k, id] of [['luas', 'inLuas'], ['lebar', 'inLebar'], ['northDeg', 'inNorthDeg'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
   $('inNorth').checked = !!I.north; $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
-  S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
+  S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.extra = o.extra || []; $('inLuasBT').value = o.luasBT || ''; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
   if (S.wil) { drawWilayah(); setProj(); $('btnJalan').disabled = false; }
-  if (S.osm) { drawOSM(); $('jalanInfo').textContent = `✅ ${S.osm.ways.length} ruas jalan (dari proyek).`; }
+  if (S.osm) { drawOSM(); $('jalanInfo').textContent = `${S.osm.ways.length} ruas jalan (dari proyek).`; }
   if (o.img) setImage(o.img.dataURL, o.img.name, true);
   LOG.info('Proyek dimuat: ' + file.name, { versi: o.version, disimpan: o.saved });
   setTimeout(() => { onSketchChanged(); renderCands(); drawCands(); if (S.sel >= 0 && S.cands[S.sel]) selectCand(S.sel, true); markDone(); }, 300);
@@ -1163,7 +1189,7 @@ function init() {
   isiKecamatan(); isiKelurahan();
   $('inKec').onchange = () => { isiKelurahan(); LOG.info('Kecamatan dipilih: ' + $('inKec').value); };
   $('inKel').onchange = () => pilihDariDaftar();
-  $('btnNew').onclick = bidangBaru;
+  $('btnNew').onclick = () => bidangBaru(false);
   $('inFoot').onchange = () => { if (S.wil && SMD.jalan) { S.cands = []; S.sel = -1; S.T = null; terapkanJalanOffline(); } };
   initDataSamarinda();
   $('btnManualArea').onclick = safe('Area manual', async () => {
@@ -1187,6 +1213,25 @@ function init() {
   $('logClear').onclick = () => { LOG.entries = []; LOG.errors = 0; LOG.warns = 0; renderLog(); };
   $('logDl').onclick = () => { const t = new Date(), p = n => String(n).padStart(2, '0'); download(new Blob([LOG.text()], { type: 'text/plain' }), `log-poligon-${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}.txt`); };
   $('logCopy').onclick = async () => { try { await navigator.clipboard.writeText(LOG.text()); toast('Log disalin.', 'ok'); } catch (e) { toast('Gagal menyalin; gunakan Unduh log.', 'warn'); } };
+  muatQ(); renderDaftar(); renderRefInfo(); drawReferensi(); renderExtraList();
+  $('inCrs').value = SET.crs;
+  $('inCrs').onchange = () => { SET.crs = $('inCrs').value; try { localStorage.setItem('plotkw.crs', SET.crs); } catch (e) { /* abaikan */ } LOG.info('Sistem koordinat ekspor: ' + SET.crs); renderResult(); updateKop(); };
+  $('btnMenu').onclick = e => { e.stopPropagation(); $('menu').classList.toggle('buka'); };
+  document.addEventListener('click', e => { if (!$('menu').contains(e.target)) $('menu').classList.remove('buka'); });
+  $('menu').querySelectorAll('.menu-isi .btn').forEach(b => b.addEventListener('click', () => setTimeout(() => $('menu').classList.remove('buka'), 50)));
+  $('kopToggle').onclick = () => { const k = $('kop'); k.classList.toggle('kecil'); $('kopToggle').textContent = k.classList.contains('kecil') ? 'buka' : 'ciutkan'; };
+  $('btnDaftar').onclick = bukaLaci; $('laciClose').onclick = tutupLaci;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupLaci(); });
+  $('fileList').onchange = e => { if (e.target.files[0]) imporDaftar(e.target.files[0]); e.target.value = ''; };
+  $('listFilter').onchange = renderDaftar; $('listSearch').oninput = renderDaftar;
+  $('btnRekapXlsx').onclick = () => ekspRekap('xlsx'); $('btnRekapCsv').onclick = () => ekspRekap('csv');
+  $('btnAllKml').onclick = ekspGabunganKML; $('btnAllDxf').onclick = ekspGabunganDXF; $('btnListClear').onclick = hapusDaftar;
+  $('btnSimpanDaftar').onclick = simpanKeDaftar;
+  $('btnLanjut').onclick = () => { const i = +$('btnLanjut').dataset.i; if (i >= 0) pilihItem(i); };
+  $('btnDXF').onclick = ekspDXF; $('btnWorld').onclick = ekspWorld;
+  $('fileRef').onchange = e => { if (e.target.files[0]) imporReferensi(e.target.files[0]); e.target.value = ''; };
+  $('btnRefClear').onclick = () => { REF.polys = []; CTX = null; drawReferensi(); renderRefInfo(); LOG.info('Bidang referensi dihapus'); };
+  for (const id of ['inNama', 'inLuas', 'inLuasBT']) $(id).addEventListener('input', updateKop);
   renderRoadList(); renderParcelInfo(); updateCpInfo(); go(1);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

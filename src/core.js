@@ -45,6 +45,98 @@ const CORE = (() => {
     return { zone: zone + '.' + sub, E, N };
   }
 
+  // Invers Transverse Mercator → [lat, lon]
+  function fromTM(E, N, lonC, k0, FE, FN) {
+    const a = 6378137, f = 1 / 298.257223563, e2 = f * (2 - f), ep2 = e2 / (1 - e2);
+    const e4 = e2 * e2, e6 = e4 * e2, e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+    const x = (E - FE) / k0, M = (N - FN) / k0;
+    const mu = M / (a * (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256));
+    const p1 = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * Math.sin(2 * mu) + (21 * e1 ** 2 / 16 - 55 * e1 ** 4 / 32) * Math.sin(4 * mu)
+      + (151 * e1 ** 3 / 96) * Math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * Math.sin(8 * mu);
+    const s1 = Math.sin(p1), c1 = Math.cos(p1), t1 = Math.tan(p1);
+    const C1 = ep2 * c1 * c1, T1 = t1 * t1, N1 = a / Math.sqrt(1 - e2 * s1 * s1), R1 = a * (1 - e2) / Math.pow(1 - e2 * s1 * s1, 1.5), D = x / N1;
+    const lat = p1 - (N1 * t1 / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * D ** 4 / 24
+      + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * D ** 6 / 720);
+    const lon = lonC * DEG + (D - (1 + 2 * T1 + C1) * D ** 3 / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * D ** 5 / 120) / c1;
+    return [lat / DEG, lon / DEG];
+  }
+  // Sistem koordinat proyek (ekspor/impor DXF)
+  const CRS = {
+    'tm3-50.2': { nama: 'TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)', lonC: 118.5, k0: 0.9999, FE: 200000, FN: 1500000 },
+    'tm3-50.1': { nama: 'TM-3 zona 50.1 (bujur < 117°)', lonC: 115.5, k0: 0.9999, FE: 200000, FN: 1500000 },
+    'utm-50s': { nama: 'UTM zona 50S (WGS84)', lonC: 117, k0: 0.9996, FE: 500000, FN: 10000000 }
+  };
+  const crsFwd = (id, lat, lon) => { const c = CRS[id]; return toTM(lat, lon, c.lonC, c.k0, c.FE, c.FN); };
+  const crsInv = (id, E, N) => { const c = CRS[id]; return fromTM(E, N, c.lonC, c.k0, c.FE, c.FN); };
+
+  // DXF R12 sederhana (dibuka AutoCAD semua versi). items: [{layer, pts:[[E,N]], closed}] , texts: [{layer, at:[E,N], h, text}]
+  function dxfR12(layers, items, texts) {
+    const L = [];
+    const p = (c, v) => L.push(String(c), String(v));
+    p(0, 'SECTION'); p(2, 'HEADER'); p(9, '$ACADVER'); p(1, 'AC1009'); p(9, '$INSUNITS'); p(70, 6); p(0, 'ENDSEC');
+    p(0, 'SECTION'); p(2, 'TABLES'); p(0, 'TABLE'); p(2, 'LAYER'); p(70, layers.length);
+    for (const l of layers) { p(0, 'LAYER'); p(2, l.name); p(70, 0); p(62, l.color); p(6, 'CONTINUOUS'); }
+    p(0, 'ENDTAB'); p(0, 'ENDSEC');
+    p(0, 'SECTION'); p(2, 'ENTITIES');
+    for (const it of items) {
+      p(0, 'POLYLINE'); p(8, it.layer); p(66, 1); p(10, 0); p(20, 0); p(30, 0); p(70, it.closed ? 1 : 0);
+      for (const q of it.pts) { p(0, 'VERTEX'); p(8, it.layer); p(10, q[0].toFixed(4)); p(20, q[1].toFixed(4)); p(30, 0); }
+      p(0, 'SEQEND'); p(8, it.layer);
+    }
+    for (const t of texts || []) { p(0, 'TEXT'); p(8, t.layer); p(10, t.at[0].toFixed(4)); p(20, t.at[1].toFixed(4)); p(30, 0); p(40, t.h || 1); p(1, String(t.text).replace(/[\r\n]+/g, ' ')); }
+    p(0, 'ENDSEC'); p(0, 'EOF');
+    return L.join('\r\n') + '\r\n';
+  }
+  // Baca polyline tertutup dari DXF (LWPOLYLINE & POLYLINE). Hasil: [{layer, pts:[[x,y]], closed}]
+  function dxfPolylines(txt) {
+    const lines = txt.split(/\r?\n/); const pairs = [];
+    for (let i = 0; i + 1 < lines.length; i += 2) pairs.push([lines[i].trim(), lines[i + 1].trim()]);
+    const out = []; let cur = null, mode = null, vx = null;
+    const flush = () => { if (cur && cur.pts.length >= 3) out.push(cur); cur = null; };
+    for (const [c, v] of pairs) {
+      if (c === '0') {
+        if (mode === 'vertex' && vx && cur) { cur.pts.push(vx); vx = null; }
+        if (v === 'LWPOLYLINE') { flush(); cur = { layer: '', pts: [], closed: false }; mode = 'lw'; }
+        else if (v === 'POLYLINE') { flush(); cur = { layer: '', pts: [], closed: false }; mode = 'pl'; }
+        else if (v === 'VERTEX' && cur) { mode = 'vertex'; vx = [0, 0]; }
+        else if (v === 'SEQEND') { flush(); mode = null; }
+        else { if (mode === 'lw') flush(); mode = null; }
+        continue;
+      }
+      if (!cur) continue;
+      if (c === '8' && (mode === 'lw' || mode === 'pl')) cur.layer = v;
+      else if (c === '70' && (mode === 'lw' || mode === 'pl')) cur.closed = (parseInt(v) & 1) === 1;
+      else if (mode === 'lw' && c === '10') cur.pts.push([parseFloat(v), 0]);
+      else if (mode === 'lw' && c === '20' && cur.pts.length) cur.pts[cur.pts.length - 1][1] = parseFloat(v);
+      else if (mode === 'vertex' && c === '10') vx[0] = parseFloat(v);
+      else if (mode === 'vertex' && c === '20') vx[1] = parseFloat(v);
+    }
+    if (mode === 'vertex' && vx && cur) cur.pts.push(vx);
+    flush();
+    return out;
+  }
+  // Titik sampel di dalam poligon (untuk hitung tumpang tindih)
+  function interiorSamples(poly, n) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const p of poly) { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+    const out = []; const k = Math.ceil(Math.sqrt(n * 2));
+    for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) {
+      const x = x0 + (x1 - x0) * (i + 0.5) / k, y = y0 + (y1 - y0) * (j + 0.5) / k;
+      if (pointInRing(x, y, poly)) out.push([x, y]);
+    }
+    return out;
+  }
+  // Fraksi luas poligon A (titik sampel dunia) yang jatuh di poligon referensi
+  function overlapFrac(samplesW, ref) {
+    if (!ref || !ref.length || !samplesW.length) return 0;
+    let n = 0;
+    for (const s of samplesW) for (const r of ref) {
+      if (s[0] < r.bb[0] || s[0] > r.bb[2] || s[1] < r.bb[1] || s[1] > r.bb[3]) continue;
+      if (pointInRing(s[0], s[1], r.pts)) { n++; break; }
+    }
+    return n / samplesW.length;
+  }
+
   function normAng(a) { while (a <= -Math.PI) a += 2 * Math.PI; while (a > Math.PI) a -= 2 * Math.PI; return a; }
 
   function normName(s) {
@@ -322,7 +414,9 @@ const CORE = (() => {
     }
     const rev = rn ? rc / rn : 1;
     const wr = ctx.wRev;
-    return { score: 1 - ((1 - wr) * fwd + wr * rev), fwd, rev, within: within / n, dev: dev / n, nRev: rn };
+    let ovl = 0;
+    if (ctx.ref && ctx.ref.length && ctx.parcelSamples) ovl = overlapFrac(ctx.parcelSamples.map(p => fwdT(T, p[0], p[1])), ctx.ref);
+    return { score: 1 - ((1 - wr) * fwd + wr * rev) - 0.6 * ovl, fwd, rev, ovl, within: within / n, dev: dev / n, nRev: rn };
   }
 
   function refine(ctx, T0, bounds, iters = 80) {
@@ -481,11 +575,14 @@ const CORE = (() => {
     const osJ = osmJunctions(nb, I.nodeXY, Math.min(40, Math.max(10, delta * I.s0)), I.inArea);
     let longest = roadsM[0]; for (const p of roadsM) if (plLen(p) > plLen(longest)) longest = p;
     log('info', `Titik sampel sketsa ${sk.x.length}, simpang sketsa ${skJ.length}, simpang OSM di wilayah ${osJ.length}, titik OSM ${OS.xs.length}`);
-    return { fields, sk, sub, skF, cov, osm, osmSamples, skJ, osJ, longest, tau: I.tau, wRev: I.wRev ?? 0.3, inArea: I.inArea, parcelC: centroid(parcelM), roadsM, parcelM, bb };
+    const ref = (I.refXY || []).map(pts => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return { pts, bb: [a, b, c, d] }; });
+    if (ref.length) log('info', `Bidang referensi untuk cek tumpang tindih: ${ref.length}`);
+    return { fields, sk, sub, skF, cov, osm, osmSamples, skJ, osJ, longest, tau: I.tau, wRev: I.wRev ?? 0.3, inArea: I.inArea, parcelC: centroid(parcelM), roadsM, parcelM, bb,
+      ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null };
   }
   const CORE_normName = normName;
 
-  return { prepareCtx, DEG, BIG, makeProj, toUTM, toTM3, normAng, normName, nameMatch, plLen, plPointAt, plNearest, polyArea, centroid,
+  return { prepareCtx, fromTM, CRS, crsFwd, crsInv, dxfR12, dxfPolylines, interiorSamples, overlapFrac, DEG, BIG, makeProj, toUTM, toTM3, normAng, normName, nameMatch, plLen, plPointAt, plNearest, polyArea, centroid,
     pointInRing, sketchJunctions, buildGraph, osmJunctions, buildField, look, samplePolys, buildBuckets,
     fwdT, invT, similarity2D, score, refine, matchAll };
 })();

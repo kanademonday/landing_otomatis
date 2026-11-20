@@ -3,223 +3,447 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pencocok Situasi Bidang Tanah → Poligon KML</title>
+<title>Plot Bidang KW 4–6 · Samarinda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" onerror="this.onerror=null;this.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>if(!window.L){document.write('<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>');}</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-:root{--bg:#0f172a;--panel:#111827;--card:#1f2937;--line:#334155;--tx:#e5e7eb;--mut:#94a3b8;--acc:#22c55e;--acc2:#3b82f6;--warn:#f59e0b;--err:#ef4444}
+/* Token: kertas peta kadaster, tinta petrol, garis bidang merah */
+:root{
+  --kertas:#EEF1EC; --panel:#FBFCFA; --putih:#fff;
+  --tinta:#18302E; --tinta2:#4C605D; --tinta3:#7C8C88; --garis:#CBD3CD; --garis2:#E2E7E3;
+  --teal:#1F5E5B; --teal2:#E3EEEC; --merah:#C2362F; --merah2:#F7E4E2; --biru:#2B67A8; --oranye:#C8641A; --oranye2:#FBEBDD; --hijau:#2F7D4F; --hijau2:#E2F1E7;
+  --r:6px; --f:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif; --fc:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;
+}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#020617;border-bottom:1px solid var(--line);flex-wrap:wrap}
-header h1{font-size:15px;margin:0 10px 0 0;white-space:nowrap}
-.steps{display:flex;gap:4px;flex-wrap:wrap}
-.steps button{background:var(--card);border:1px solid var(--line);color:var(--mut);padding:6px 10px;border-radius:6px;cursor:pointer}
-.steps button.on{background:var(--acc2);color:#fff;border-color:var(--acc2)}
-.steps button.done{color:var(--acc)}
+html,body{margin:0;height:100%}
+body{background:var(--kertas);color:var(--tinta);font:15px/1.5 var(--f);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- bilah atas ---------- */
+.top{height:58px;display:flex;align-items:center;gap:18px;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--garis)}
+.merk{display:flex;align-items:center;gap:10px;min-width:max-content}
+.merk svg{flex:none}
+.merk b{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.merk small{display:block;font:500 12px/1 var(--fc);color:var(--tinta3);margin-top:3px}
+.merk a{color:var(--tinta3);text-decoration:none}
+.lokasi{display:flex;gap:6px;align-items:center}
+.lokasi select{height:34px;max-width:200px;border:1px solid var(--garis);background:var(--putih);border-radius:var(--r);padding:0 28px 0 10px;font-weight:500;min-width:170px;appearance:none;text-overflow:ellipsis;
+  background-image:linear-gradient(45deg,transparent 50%,var(--tinta2) 50%),linear-gradient(135deg,var(--tinta2) 50%,transparent 50%);background-position:calc(100% - 15px) 15px,calc(100% - 10px) 15px;background-size:5px 5px;background-repeat:no-repeat}
+.steps{display:flex;gap:2px;margin-left:6px}
+.steps button{border:0;background:none;height:58px;padding:0 12px;display:flex;align-items:center;gap:7px;color:var(--tinta2);font-weight:500;cursor:pointer;border-bottom:3px solid transparent}
+.steps button .n{width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor;display:grid;place-items:center;font:600 12px/1 var(--fc)}
+.steps button:hover{color:var(--tinta)}
+.steps button.on{color:var(--tinta);border-bottom-color:var(--merah)}
+.steps button.on .n{background:var(--tinta);border-color:var(--tinta);color:#fff}
+.steps button.done .n{background:var(--hijau);border-color:var(--hijau);color:#fff}
 .sp{flex:1}
-button,.btn{background:#334155;color:var(--tx);border:1px solid #475569;border-radius:6px;padding:6px 10px;cursor:pointer;font:inherit}
-button:hover{filter:brightness(1.15)}
-button.pri{background:var(--acc2);border-color:var(--acc2);color:#fff}
-button.ok{background:#15803d;border-color:#15803d;color:#fff}
-button.dan{background:#7f1d1d;border-color:#991b1b}
-button.on{outline:2px solid var(--acc);}
-button:disabled{opacity:.5;cursor:not-allowed}
-#app{display:flex;height:calc(100% - 50px)}
-aside{width:380px;min-width:300px;overflow:auto;background:var(--panel);border-right:1px solid var(--line);padding:12px}
+.aksi{display:flex;gap:6px;align-items:center}
+
+/* ---------- tombol ---------- */
+.btn,button.btn,label.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 12px;border:1px solid var(--garis);background:var(--putih);border-radius:var(--r);cursor:pointer;font-weight:500;white-space:nowrap;text-decoration:none;color:var(--tinta)}
+.btn:hover{border-color:var(--tinta3)}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#fff}
+.btn.pri:hover{background:#174b49}
+.btn.dan{color:var(--merah);border-color:#E8BDB9}
+.btn.kecil{height:28px;padding:0 9px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{font:600 12px/1 var(--fc);background:var(--teal2);color:var(--teal);padding:4px 7px;border-radius:999px}
+.menu{position:relative}
+.menu-isi{position:absolute;right:0;top:40px;background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);box-shadow:0 8px 24px rgba(24,48,46,.12);padding:6px;min-width:210px;z-index:1500;display:none}
+.menu.buka .menu-isi{display:block}
+.menu-isi .btn{width:100%;justify-content:flex-start;border:0;height:36px}
+.menu-isi .btn:hover{background:var(--kertas)}
+
+/* ---------- tata letak kerja ---------- */
+#app{display:flex;height:calc(100% - 58px)}
+aside{width:390px;min-width:330px;overflow:auto;background:var(--panel);border-right:1px solid var(--garis)}
 main{flex:1;display:flex;position:relative;min-width:0}
 .pane{flex:1;position:relative;min-width:0;display:none}
 .pane.show{display:block}
-#map{position:absolute;inset:0}
-canvas{display:block}
-#skWrap canvas,#cmpWrap canvas{position:absolute;inset:0;width:100%;height:100%;background:#0b1220}
-.panel{display:none}.panel.show{display:block}
-h2{font-size:15px;margin:0 0 8px}
-h3{font-size:13px;margin:14px 0 6px;color:#cbd5e1;text-transform:uppercase;letter-spacing:.04em}
-label{display:block;margin:6px 0 2px;color:var(--mut);font-size:12px}
-input[type=text],input[type=number],input[type=password],select,textarea{width:100%;background:#0b1220;color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:inherit}
-.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#cmpWrap.show+#skWrap+#mapWrap{border-left:1px solid var(--garis)}
+#map{position:absolute;inset:0;background:#dde3de}
+#skWrap canvas,#cmpWrap canvas{position:absolute;inset:0;width:100%;height:100%;background:#e6eae6}
+
+/* ---------- panel langkah ---------- */
+.panel{display:none;padding:18px 18px 40px}
+.panel.show{display:block}
+.panel>header{margin-bottom:6px}
+h2{font-size:21px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.lead{color:var(--tinta2);margin:0 0 6px}
+section.blok{border-top:1px solid var(--garis2);padding:14px 0 4px;margin-top:12px}
+h3{font-size:15px;font-weight:600;margin:0 0 8px}
+label{display:block;margin:10px 0 4px;color:var(--tinta2);font-size:13px;font-weight:500}
+label.cek{display:flex;gap:8px;align-items:flex-start;color:var(--tinta);font-size:14px;font-weight:400}
+label.cek input{margin-top:4px;accent-color:var(--teal)}
+input[type=text],input[type=number],input[type=password],input[type=search],select,textarea{width:100%;height:36px;border:1px solid var(--garis);border-radius:var(--r);background:var(--putih);padding:0 10px}
+textarea{height:64px;padding:8px 10px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--teal);outline:none;box-shadow:0 0 0 3px var(--teal2)}
+input[readonly]{background:var(--kertas)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .row>*{flex:1}
 .row>.nf{flex:0 0 auto}
-.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0}
-.hint{color:var(--mut);font-size:12px}
-.list .item{padding:6px 8px;border:1px solid var(--line);border-radius:6px;margin:4px 0;cursor:pointer;background:#0b1220}
-.list .item.sel{border-color:var(--acc);background:#052e16}
-.badge{display:inline-block;padding:0 6px;border-radius:9px;font-size:11px;background:#334155;margin-left:4px}
-.b-ok{background:#166534}.b-mid{background:#92400e}.b-low{background:#7f1d1d}
-.tools{position:absolute;top:8px;left:8px;z-index:5;display:flex;gap:4px;flex-wrap:wrap;background:rgba(2,6,23,.85);padding:6px;border-radius:8px}
-.tools button{padding:5px 8px;font-size:13px}
-.legend{position:absolute;bottom:8px;left:8px;z-index:5;background:rgba(2,6,23,.85);padding:6px 8px;border-radius:8px;font-size:12px}
-.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin:0 4px 0 8px}
-.progress{height:8px;background:#0b1220;border-radius:4px;overflow:hidden;border:1px solid var(--line)}
-.progress div{height:100%;width:0;background:var(--acc)}
-table{width:100%;border-collapse:collapse;font-size:12px}
-td,th{border:1px solid var(--line);padding:3px 4px;text-align:right}
-th{background:#0b1220}
-#log{position:fixed;left:0;right:0;bottom:0;height:0;background:#020617;border-top:2px solid var(--line);z-index:2000;transition:height .2s;display:flex;flex-direction:column}
-#log.open{height:42%}
-#log .bar{display:flex;gap:6px;padding:6px;align-items:center}
-#log pre{flex:1;margin:0;overflow:auto;padding:6px 10px;font:12px/1.4 ui-monospace,Consolas,monospace;white-space:pre-wrap}
-.l-ERROR{color:#fca5a5}.l-WARN{color:#fcd34d}.l-INFO{color:#cbd5e1}
-#toast{position:fixed;right:12px;bottom:12px;z-index:3000;display:flex;flex-direction:column;gap:6px;max-width:420px}
-#toast div{background:#1e293b;border-left:4px solid var(--acc2);padding:8px 10px;border-radius:6px;box-shadow:0 4px 12px #0008}
-#toast div.err{border-color:var(--err)}#toast div.warn{border-color:var(--warn)}#toast div.ok{border-color:var(--acc)}
-.cand-ic{background:#22c55e;color:#000;font-weight:700;border-radius:50%;text-align:center;line-height:22px;border:2px solid #fff}
-.cand-ic.sel{background:#f43f5e;color:#fff}
-.cp-ic{background:#facc15;color:#000;font-weight:700;border-radius:50%;text-align:center;line-height:18px;border:2px solid #000}
-details summary{cursor:pointer;color:#cbd5e1;margin:10px 0 4px}
-.drop{border:2px dashed #475569;border-radius:8px;padding:10px;text-align:center;color:var(--mut)}
+.dua{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hint{color:var(--tinta3);font-size:13px;margin:6px 0}
+.card{background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);padding:10px 12px;margin:8px 0;font-size:14px}
+details{margin:10px 0}
+details summary{cursor:pointer;color:var(--teal);font-weight:500;font-size:14px}
+details[open] summary{margin-bottom:6px}
+.list .item{padding:8px 10px;border:1px solid var(--garis);border-radius:var(--r);margin:6px 0;cursor:pointer;background:var(--putih);font-size:14px}
+.list .item:hover{border-color:var(--tinta3)}
+.list .item.sel{border-color:var(--teal);box-shadow:inset 3px 0 0 var(--teal)}
+.list .item.row{cursor:default}
+.list .item input{height:30px}
+.list .item button,.item .dan{height:30px;width:30px;padding:0;border:1px solid #E8BDB9;color:var(--merah);background:var(--putih);border-radius:var(--r);cursor:pointer}
+.badge{display:inline-block;padding:2px 7px;border-radius:999px;font:600 11px/1.3 var(--fc);background:var(--garis2);color:var(--tinta2);margin-left:4px;vertical-align:1px}
+.b-ok{background:var(--hijau2);color:var(--hijau)}.b-mid{background:var(--oranye2);color:var(--oranye)}.b-low{background:var(--merah2);color:var(--merah)}
+.drop{border:1.5px dashed var(--tinta3);border-radius:var(--r);padding:16px;text-align:center;color:var(--tinta2);background:var(--putih)}
+.drop .btn{margin-top:6px}
+.progress{height:6px;background:var(--garis2);border-radius:3px;overflow:hidden;margin-top:10px}
+.progress div{height:100%;width:0;background:var(--teal);transition:width .2s}
+table{width:100%;border-collapse:collapse;font:14px/1.35 var(--fc);font-variant-numeric:tabular-nums}
+td,th{border-bottom:1px solid var(--garis2);padding:5px 6px;text-align:right}
+th{color:var(--tinta2);font-weight:500;text-align:right}
+td:first-child,th:first-child{text-align:left}
+.grid-btn{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.grid-btn .btn{padding:0 6px}
+.qc{list-style:none;padding:0;margin:0}
+.qc li{padding:7px 10px 7px 30px;border-radius:var(--r);margin:5px 0;font-size:14px;position:relative}
+.qc li::before{position:absolute;left:10px;top:7px;font-weight:700}
+.qc-ok{background:var(--hijau2)}.qc-ok::before{content:'✓';color:var(--hijau)}
+.qc-warn{background:var(--oranye2)}.qc-warn::before{content:'!';color:var(--oranye)}
+.qc-bad{background:var(--merah2)}.qc-bad::before{content:'×';color:var(--merah)}
+.qc-info{background:var(--garis2)}.qc-info::before{content:'i';color:var(--tinta2)}
+.swatch-or{width:12px;height:12px;border:2px dashed var(--oranye);background:var(--oranye2);border-radius:2px}
+.ekspor{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.ekspor .btn{justify-content:flex-start}
+.ekspor .btn small{color:var(--tinta3);font-weight:400;margin-left:auto}
+
+/* ---------- alat sketsa ---------- */
+.tools{position:absolute;top:12px;left:12px;right:12px;z-index:5;display:flex;gap:4px;flex-wrap:wrap;background:var(--putih);border:1px solid var(--garis);padding:5px;border-radius:8px;box-shadow:0 2px 10px rgba(24,48,46,.08);width:max-content;max-width:calc(100% - 24px)}
+.tools button{height:32px;border:0;background:none;border-radius:5px;padding:0 10px;cursor:pointer;font-weight:500;color:var(--tinta2);display:flex;align-items:center;gap:6px}
+.tools button:hover{background:var(--kertas);color:var(--tinta)}
+.tools button.on{background:var(--tinta);color:#fff}
+.tools .sep{width:1px;background:var(--garis);margin:4px 3px}
+.tools i{width:12px;height:12px;display:inline-block;border-radius:2px}
+.legend{position:absolute;bottom:12px;left:12px;z-index:5;background:rgba(255,255,255,.94);border:1px solid var(--garis);padding:6px 10px;border-radius:var(--r);font-size:13px;color:var(--tinta2)}
+.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin:0 5px 0 10px}
+.legend i:first-child{margin-left:0}
+
+/* ---------- kop gambar (title block) ---------- */
+#kop{position:absolute;right:14px;bottom:14px;z-index:900;background:rgba(255,255,255,.97);border:1.5px solid var(--tinta);font-family:var(--fc);width:330px;box-shadow:3px 3px 0 rgba(24,48,46,.18)}
+#kop .judul{display:flex;align-items:baseline;gap:8px;padding:7px 10px;border-bottom:1.5px solid var(--tinta)}
+#kop .judul b{font:600 17px/1.2 var(--f);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#kop .judul button{border:0;background:none;cursor:pointer;color:var(--tinta3);font-size:13px;padding:0}
+#kop dl{display:grid;grid-template-columns:1fr 1fr;margin:0}
+#kop dl>div{padding:5px 10px;border-right:1px solid var(--garis);border-bottom:1px solid var(--garis)}
+#kop dl>div:nth-child(2n){border-right:0}
+#kop dl>div.lebar{grid-column:1/-1;border-right:0}
+#kop dl>div:last-child,#kop dl>div:nth-last-child(2):not(.lebar){border-bottom:0}
+#kop dt{font-size:12px;color:var(--tinta3)}
+#kop dd{margin:0;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+#kop.kecil dl{display:none}
+#kop.kecil .judul{border-bottom:0}
+.st{display:inline-block;font:600 12px/1.3 var(--fc);padding:2px 8px;border-radius:999px}
+.st-belum{background:var(--garis2);color:var(--tinta2)}.st-ok{background:var(--hijau2);color:var(--hijau)}.st-ragu{background:var(--oranye2);color:var(--oranye)}.st-lap{background:var(--merah2);color:var(--merah)}.st-no{background:#E4E4E4;color:#555}
+
+/* ---------- laci daftar bidang ---------- */
+#laci{position:fixed;top:58px;left:0;bottom:0;width:min(880px,100%);background:var(--panel);border-right:1px solid var(--garis);z-index:1800;transform:translateX(-102%);transition:transform .22s ease;display:flex;flex-direction:column;box-shadow:12px 0 32px rgba(24,48,46,.14)}
+#laci.buka{transform:none}
+#laci .kepala{padding:16px 18px 10px;border-bottom:1px solid var(--garis2)}
+#laci .kepala .row{margin-top:10px}
+#laci .isi{flex:1;overflow:auto;padding:0 18px}
+#laci table{font-size:14px}
+#laci th{position:sticky;top:0;background:var(--panel);text-align:left;padding-top:10px}
+#laci td{text-align:left}
+#laci td.num,#laci th.num{text-align:right}
+#laci tr[data-i]{cursor:pointer}
+#laci tr[data-i]:hover td{background:var(--kertas)}
+#laci tr.aktif td{background:var(--teal2)}
+#laci td.kosong{text-align:center;color:var(--tinta3);padding:40px 10px;font-family:var(--f)}
+#laci .kaki{padding:10px 18px;border-top:1px solid var(--garis2);display:flex;gap:6px;flex-wrap:wrap}
+
+/* ---------- log & notifikasi ---------- */
+#log{position:fixed;left:0;right:0;bottom:0;height:0;background:var(--putih);border-top:1px solid var(--garis);z-index:2000;transition:height .2s;display:flex;flex-direction:column;overflow:hidden}
+#log.open{height:42%;box-shadow:0 -10px 30px rgba(24,48,46,.12)}
+#log .bar{display:flex;gap:6px;padding:8px 12px;align-items:center;border-bottom:1px solid var(--garis2)}
+#log pre{flex:1;margin:0;overflow:auto;padding:8px 12px;font:12.5px/1.45 var(--fc);white-space:pre-wrap;background:var(--kertas)}
+.l-ERROR{color:var(--merah)}.l-WARN{color:var(--oranye)}.l-INFO{color:var(--tinta2)}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:3000;display:flex;flex-direction:column-reverse;gap:6px;width:min(460px,calc(100% - 24px));pointer-events:none}
+#toast div{background:var(--putih);border:1px solid var(--garis);border-left:4px solid var(--teal);padding:9px 12px;border-radius:var(--r);box-shadow:0 6px 18px rgba(24,48,46,.12);font-size:14px}
+#toast div.err{border-left-color:var(--merah)}#toast div.warn{border-left-color:var(--oranye)}#toast div.ok{border-left-color:var(--hijau)}
+
+/* ---------- peta ---------- */
+.leaflet-container{font:13px var(--f)}
+.leaflet-bar a{color:var(--tinta)!important}
+.cand-ic{background:var(--putih);color:var(--tinta);font:700 13px/22px var(--fc);border-radius:50%;text-align:center;border:2px solid var(--tinta)}
+.cand-ic.sel{background:var(--merah);border-color:#fff;color:#fff}
+.cp-ic{background:#facc15;color:#000;font:700 12px/18px var(--fc);border-radius:50%;text-align:center;border:2px solid #000}
+
+@media (max-width:1100px){.steps button{padding:0 8px}.steps button .t{display:none}.lokasi select{min-width:120px}}
+@media (max-width:820px){
+  .top{height:auto;flex-wrap:wrap;padding:8px 12px;gap:8px}.steps button{height:40px}
+  #app{flex-direction:column;height:auto}aside{width:100%;min-width:0;border-right:0;border-bottom:1px solid var(--garis)}main{height:70vh}
+  #laci{top:0}#kop{width:270px}
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>🗺️ Pencocok Situasi Bidang → Poligon <a id="verLink" href="https://github.com/kanademonday/landing_otomatis/blob/main/CHANGELOG.md" target="_blank" style="font-size:11px;color:#94a3b8;font-weight:normal;text-decoration:none" title="Lihat catatan perubahan"></a></h1>
-  <div class="steps" id="steps">
-    <button data-step="1" class="on">1. Lokasi</button>
-    <button data-step="2">2. Sketsa</button>
-    <button data-step="3">3. Pencocokan</button>
-    <button data-step="4">4. Hasil & Ekspor</button>
+<header class="top">
+  <div class="merk">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path d="M4 9 15 4l11 6-3 14-12 2z" fill="#F7E4E2" stroke="#C2362F" stroke-width="2" stroke-linejoin="round"/><path d="M15 4 13 26" stroke="#C2362F" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="15" cy="4" r="2" fill="#18302E"/><circle cx="26" cy="10" r="2" fill="#18302E"/><circle cx="4" cy="9" r="2" fill="#18302E"/></svg>
+    <div><b>Plot Bidang</b><small>Samarinda, KW 4–6 <a id="verLink" href="https://github.com/kanademonday/landing_otomatis/blob/main/CHANGELOG.md" target="_blank" rel="noopener" title="Catatan perubahan"></a></small></div>
   </div>
+  <div class="lokasi">
+    <input type="hidden" id="inKota" value="Samarinda">
+    <select id="inKec" aria-label="Kecamatan"></select>
+    <select id="inKel" aria-label="Kelurahan"></select>
+  </div>
+  <nav class="steps" id="steps" aria-label="Langkah">
+    <button data-step="1" class="on"><span class="n">1</span><span class="t">Wilayah</span></button>
+    <button data-step="2"><span class="n">2</span><span class="t">Gambar</span></button>
+    <button data-step="3"><span class="n">3</span><span class="t">Cocokkan</span></button>
+    <button data-step="4"><span class="n">4</span><span class="t">Hasil</span></button>
+  </nav>
   <div class="sp"></div>
-  <button id="btnNew" class="pri" title="Mulai bidang berikutnya: gambar & isian dikosongkan, wilayah & data jalan tetap">🆕 Bidang baru</button>
-  <button id="btnSave" title="Simpan seluruh pekerjaan ke file .json">💾 Simpan proyek</button>
-  <label class="btn" style="margin:0;color:var(--tx);font-size:14px">📂 Muat proyek<input type="file" id="fileProj" accept=".json" hidden></label>
-  <button id="btnLog">🧾 Log <span class="badge" id="logBadge">0</span></button>
+  <div class="aksi">
+    <button class="btn" id="btnDaftar" title="Daftar bidang yang sedang dikerjakan">Daftar bidang <span class="chip" id="btnDaftarN">0</span></button>
+    <button class="btn pri" id="btnNew" title="Kosongkan gambar & isian, wilayah dan data jalan tetap">Bidang baru</button>
+    <div class="menu" id="menu">
+      <button class="btn" id="btnMenu" aria-haspopup="true" aria-label="Menu lainnya">⋯ <span class="badge" id="logBadge">0</span></button>
+      <div class="menu-isi">
+        <button class="btn" id="btnSave">Simpan proyek (.json)</button>
+        <label class="btn">Buka proyek…<input type="file" id="fileProj" accept=".json" hidden></label>
+        <button class="btn" id="btnLog">Log aplikasi</button>
+      </div>
+    </div>
+  </div>
 </header>
 
 <div id="app">
 <aside>
-  <!-- STEP 1 -->
+  <!-- 1. WILAYAH -->
   <div class="panel show" data-panel="1">
-    <h2>1. Tentukan wilayah</h2>
-    <label>Kota</label><input type="text" id="inKota" value="Samarinda" readonly>
-    <label>Kecamatan</label><select id="inKec"></select>
-    <label>Kelurahan</label><select id="inKel"></select>
+    <header><h2>Wilayah</h2><p class="lead">Pilih kecamatan dan kelurahan di bilah atas. Batas dan jalan langsung terpasang.</p></header>
     <div class="card hint" id="dataInfo">Memuat data Samarinda…</div>
-    <details><summary>Batas wilayah tidak tepat / tidak ada? Cari lewat internet</summary>
-      <div class="hint">Mencari batas kelurahan terpilih di OpenStreetMap (Nominatim).</div>
-      <div class="row" style="margin-top:6px"><button id="btnCari">🔎 Cari wilayah via internet</button></div>
-      <div class="list" id="wilList"></div>
-    </details>
-    <details><summary>Pakai area manual (lingkaran di tengah peta)</summary>
-      <div class="hint">Geser peta ke lokasi yang dimaksud, lalu pakai titik tengah peta sebagai pusat.</div>
-      <div class="row"><div><label>Radius (m)</label><input type="number" id="inRad" value="1500" min="200" max="6000"></div>
-      <button class="nf" id="btnManualArea" style="margin-top:18px">Pakai tengah peta</button></div>
-    </details>
-    <h3>Data jalan</h3>
-    <label><input type="checkbox" id="inFoot" checked> Sertakan gang/jalan setapak (footway, path, track)</label>
-    <button id="btnJalan" disabled title="Biasanya tidak perlu: data jalan Samarinda sudah tersimpan">⬇️ Ambil ulang dari internet (opsional)</button>
     <div class="card hint" id="jalanInfo">Belum ada data jalan.</div>
-    <details><summary>Server sibuk terus? Impor file data jalan</summary>
-      <div class="hint">Buka <b>openstreetmap.org</b> → geser ke kelurahan → tombol <b>Ekspor</b> → <b>Ekspor</b> (unduh file <i>map.osm</i>). Atau dari overpass-turbo.eu (Ekspor → GeoJSON/raw). Lalu pilih filenya di sini:</div>
-      <label class="btn" style="display:inline-block;margin-top:6px;color:var(--tx)">📁 Pilih file .osm / .json / .geojson<input type="file" id="fileOsm" accept=".osm,.xml,.json,.geojson" hidden></label>
-    </details>
-    <div class="hint">Peta dasar: pilih di ikon lapisan (kanan atas peta). Bila satu lapisan kosong/abu-abu, ganti lapisan lain.</div>
+    <label class="cek"><input type="checkbox" id="inFoot" checked> Ikutkan gang dan jalan setapak</label>
+
+    <section class="blok">
+      <h3>Bidang yang sudah diplot</h3>
+      <p class="hint">Bidang hasil digitasi AutoCAD (DXF), KML, atau GeoJSON dipakai sebagai acuan: bidang baru tidak boleh menumpuk di atasnya. File hanya dibaca di browser ini.</p>
+      <label for="inRefCrs">Sistem koordinat file DXF</label>
+      <select id="inRefCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
+      <div class="row" style="margin-top:8px"><label class="btn" style="margin:0">Impor bidang…<input type="file" id="fileRef" accept=".dxf,.kml,.geojson,.json" hidden></label><button class="btn nf dan" id="btnRefClear">Hapus</button></div>
+      <p class="hint" id="refInfo"></p>
+    </section>
+
+    <section class="blok">
+      <h3>Cadangan bila data tidak tersedia</h3>
+      <details><summary>Cari batas wilayah lewat internet</summary>
+        <button class="btn" id="btnCari">Cari batas kelurahan terpilih</button>
+        <div class="list" id="wilList"></div>
+      </details>
+      <details><summary>Ambil ulang jalan dari internet</summary>
+        <p class="hint">Biasanya tidak perlu. Gunakan bila jalan baru belum ada di data tersimpan.</p>
+        <button class="btn" id="btnJalan" disabled>Ambil jalan terbaru</button>
+        <p class="hint">Atau impor file <i>.osm</i> dari openstreetmap.org (Ekspor):</p>
+        <label class="btn" style="margin:0">Impor file jalan…<input type="file" id="fileOsm" accept=".osm,.xml,.json,.geojson" hidden></label>
+      </details>
+      <details><summary>Pakai area lingkaran di tengah peta</summary>
+        <div class="row"><div><label for="inRad">Radius (m)</label><input type="number" id="inRad" value="1500" min="200" max="6000"></div><button class="btn nf" id="btnManualArea" style="margin-top:26px">Pakai tengah peta</button></div>
+      </details>
+    </section>
   </div>
 
-  <!-- STEP 2 -->
+  <!-- 2. GAMBAR -->
   <div class="panel" data-panel="2">
-    <h2>2. Gambar situasi</h2>
-    <div class="drop" id="drop">Seret gambar ke sini atau <label class="btn" style="display:inline-block;margin:0;color:var(--tx)">pilih file<input type="file" id="fileImg" accept="image/*" hidden></label></div>
-    <div class="hint" style="margin-top:6px">Lalu <b>telusuri jalan</b> (alat <b>Jalan</b>: klik titik demi titik, klik-ganda/Enter untuk selesai) dan <b>gambar bidang tanah</b> (alat <b>Bidang</b>). Tarik ujung jalan ke jalan lain supaya simpang terdeteksi (titik kuning). Gulir = zoom, tombol tengah/alat Geser = geser.</div>
-    <h3>Jalan pada sketsa</h3>
-    <label>Nama jalan untuk garis berikutnya (opsional)</label>
-    <input type="text" id="inRoadName" placeholder="mis. Jl. Pemuda / Gg. Melati">
-    <div id="roadList" class="list"></div>
-    <div class="card" id="parcelInfo">Bidang: belum digambar</div>
-    <h3>Informasi bidang</h3>
-    <label>Luas tanah (m²) — sangat disarankan (menentukan skala)</label>
-    <input type="number" id="inLuas" placeholder="mis. 450">
-    <label>…atau perkiraan lebar gambar di lapangan (m), bila luas tidak ada</label>
-    <input type="number" id="inLebar" placeholder="mis. 150">
-    <label><input type="checkbox" id="inNorth"> Arah utara diketahui (ada panah utara di gambar)</label>
-    <div class="row"><div><label>Sudut panah utara (°, searah jarum jam dari atas gambar)</label><input type="number" id="inNorthDeg" value="0"></div></div>
-    <div class="hint">0 = utara menghadap ke atas gambar; 90 = utara ke kanan.</div>
-    <details><summary>🤖 Bantuan AI: deteksi jalan & bidang otomatis (opsional)</summary>
-      <div class="hint">Memakai Claude API dengan API key Anda sendiri. Hasil AI berupa perkiraan — periksa & perbaiki dengan alat Edit.</div>
-      <label>API key Anthropic</label><input type="password" id="inKey" placeholder="sk-ant-...">
-      <label>Model</label><input type="text" id="inModel" value="claude-sonnet-5-5">
-      <div class="row" style="margin-top:6px"><button id="btnAI">Deteksi dengan AI</button><button id="btnAIUndo" disabled>Batalkan hasil AI</button></div>
+    <header><h2>Gambar situasi</h2><p class="lead">Surat ukur, gambar situasi, atau lembar peta analog.</p></header>
+    <div class="drop" id="drop">Seret gambar ke sini, tempel (Ctrl+V), atau<br><label class="btn">Pilih gambar…<input type="file" id="fileImg" accept="image/*" hidden></label></div>
+
+    <section class="blok">
+      <h3>Data bidang</h3>
+      <div class="dua">
+        <div><label for="inLuas">Luas surat ukur (m²)</label><input type="number" id="inLuas" placeholder="menentukan skala"></div>
+        <div><label for="inLuasBT">Luas di daftar / buku tanah</label><input type="number" id="inLuasBT" placeholder="untuk pemeriksaan"></div>
+      </div>
+      <div id="parcelInfo" class="card">Bidang belum digambar.</div>
+      <label for="inLebar">Tanpa luas? Perkiraan lebar gambar di lapangan (m)</label>
+      <input type="number" id="inLebar" placeholder="mis. 150">
+      <label class="cek" style="margin-top:12px"><input type="checkbox" id="inNorth"> Ada panah utara pada gambar</label>
+      <label for="inNorthDeg">Arah panah utara, derajat searah jarum jam dari atas gambar</label>
+      <input type="number" id="inNorthDeg" value="0">
+    </section>
+
+    <section class="blok">
+      <h3>Jalan pada gambar</h3>
+      <p class="hint">Telusuri jalan dengan alat <b>Jalan</b>: klik titik demi titik, Enter untuk selesai. Tempelkan ujung jalan ke jalan lain agar simpang terbaca (lingkaran kuning).</p>
+      <label for="inRoadName">Nama jalan untuk garis berikutnya</label>
+      <input type="text" id="inRoadName" placeholder="mis. Jl. Pemuda (opsional)">
+      <div id="roadList" class="list"></div>
+    </section>
+
+    <section class="blok">
+      <h3>Bidang lain pada gambar yang sama</h3>
+      <label for="inExtraName">Label untuk bidang berikutnya</label>
+      <input type="text" id="inExtraName" placeholder="NIB atau nomor hak">
+      <div id="extraList" class="list"></div>
+    </section>
+
+    <details><summary>Bantuan AI untuk menelusuri gambar</summary>
+      <p class="hint">Memakai Claude API dengan API key Anda. Gambar dikirim ke server Anthropic, jadi jangan gunakan untuk dokumen dinas tanpa izin.</p>
+      <label for="inKey">API key Anthropic</label><input type="password" id="inKey" placeholder="sk-ant-…">
+      <label for="inModel">Model</label><input type="text" id="inModel" value="claude-sonnet-5-5">
+      <div class="row" style="margin-top:8px"><button class="btn" id="btnAI">Telusuri dengan AI</button><button class="btn" id="btnAIUndo" disabled>Batalkan hasil AI</button></div>
     </details>
   </div>
 
-  <!-- STEP 3 -->
+  <!-- 3. COCOKKAN -->
   <div class="panel" data-panel="3">
-    <h2>3. Pencocokan situasi jalan</h2>
-    <div class="card hint" id="readyInfo"></div>
+    <header><h2>Cocokkan dengan peta</h2><p class="lead">Mencari tempat di kelurahan yang pola jalannya sama dengan gambar.</p></header>
+    <div class="card" id="readyInfo"></div>
+    <button class="btn pri" id="btnMatch" style="width:100%;height:40px;margin-top:6px">Mulai pencocokan</button>
+    <div class="progress"><div id="prog"></div></div>
+    <p class="hint" id="progTx"></p>
+    <section class="blok">
+      <h3>Kandidat lokasi</h3>
+      <div class="list" id="candList"><p class="hint">Belum ada.</p></div>
+    </section>
+    <section class="blok">
+      <h3>Cocokkan manual dengan titik ikat</h3>
+      <p class="hint">Bila hasil otomatis meleset: tandai ≥2 titik yang mudah dikenali di gambar (alat <b>Titik ikat</b>), lalu klik titik yang sama di peta secara berurutan.</p>
+      <div class="row"><button class="btn" id="btnCP">Pasang titik ikat di peta</button><button class="btn nf" id="btnCPReset">Ulangi</button></div>
+      <p class="hint" id="cpInfo"></p>
+    </section>
     <details><summary>Pengaturan lanjutan</summary>
-      <label>Toleransi jarak (m) — besar bila sketsa kasar</label><input type="number" id="inTau" value="12">
-      <label>Variasi skala diizinkan (±%)</label><input type="number" id="inScaleVar" value="20">
-      <label>Bobot "jalan OSM yang tak tergambar" (0–0.6)</label><input type="number" id="inWrev" value="0.3" step="0.05">
+      <label for="inTau">Toleransi jarak jalan (m), besarkan bila gambar kasar</label><input type="number" id="inTau" value="12">
+      <label for="inScaleVar">Variasi skala yang diizinkan (±%)</label><input type="number" id="inScaleVar" value="20">
+      <label for="inWrev">Bobot jalan nyata yang tidak tergambar (0–0,6)</label><input type="number" id="inWrev" value="0.3" step="0.05">
     </details>
-    <button class="pri" id="btnMatch" style="margin-top:8px">▶️ Mulai pencocokan otomatis</button>
-    <div class="progress" style="margin-top:8px"><div id="prog"></div></div>
-    <div class="hint" id="progTx"></div>
-    <h3>Kandidat lokasi</h3>
-    <div class="list" id="candList"><div class="hint">Belum ada.</div></div>
-    <h3>Cara manual: titik ikat</h3>
-    <div class="hint">Bila otomatis meleset: di langkah 2 pakai alat <b>Titik ikat</b> untuk menandai ≥2 titik yang mudah dikenali (mis. sudut simpang). Lalu klik titik yang sama di peta, berurutan.</div>
-    <div class="row" style="margin-top:6px"><button id="btnCP">📍 Klik titik ikat di peta</button><button id="btnCPReset">Ulangi</button></div>
-    <div class="hint" id="cpInfo"></div>
   </div>
 
-  <!-- STEP 4 -->
+  <!-- 4. HASIL -->
   <div class="panel" data-panel="4">
-    <h2>4. Hasil, luas & ekspor</h2>
-    <div class="card" id="resInfo">Pilih kandidat dulu di langkah 3.</div>
-    <h3>Penyesuaian halus</h3>
-    <div class="row"><div><label>Langkah geser (m)</label><select id="inStep"><option>0.5</option><option selected>1</option><option>2</option><option>5</option><option>10</option></select></div>
-    <div><label>Langkah putar (°)</label><select id="inRotStep"><option>0.5</option><option selected>1</option><option>3</option><option>10</option></select></div></div>
-    <div class="row" style="margin-top:6px">
-      <button data-mv="w">⬅️ Barat</button><button data-mv="n">⬆️ Utara</button><button data-mv="s">⬇️ Selatan</button><button data-mv="e">➡️ Timur</button>
-    </div>
-    <div class="row" style="margin-top:6px">
-      <button data-mv="rl">⟲ Putar</button><button data-mv="rr">⟳ Putar</button><button data-mv="sm">➖ Kecil 1%</button><button data-mv="sp">➕ Besar 1%</button>
-    </div>
-    <label style="margin-top:8px"><input type="checkbox" id="inForce" checked> Sesuaikan poligon agar luasnya tepat = luas yang diinput</label>
-    <label>Nama bidang (untuk KML)</label><input type="text" id="inNama" placeholder="mis. Bidang Pak Ahmad">
-    <h3>Ekspor</h3>
-    <div class="row"><button class="ok" id="btnKML">⬇️ KML (Google Earth)</button><button class="ok" id="btnKMZ">⬇️ KMZ + overlay sketsa</button></div>
-    <div class="row" style="margin-top:6px"><button id="btnGeo">GeoJSON</button><button id="btnCSV">CSV koordinat</button><button id="btnPNG">PNG perbandingan</button></div>
-    <h3>Koordinat titik sudut</h3>
-    <div id="vtx"></div>
-    <label style="margin-top:8px">Transparansi gambar sketsa di perbandingan</label><input type="range" id="inOpa" min="0" max="100" value="70" style="width:100%">
+    <header><h2>Hasil</h2></header>
+    <div id="resInfo" class="card">Pilih kandidat dulu di langkah 3.</div>
+    <section class="blok">
+      <h3>Pemeriksaan data</h3>
+      <div id="qcInfo"></div>
+    </section>
+    <section class="blok">
+      <h3>Geser halus</h3>
+      <div class="dua">
+        <div><label for="inStep">Langkah geser</label><select id="inStep"><option value="0.5">0,5 m</option><option value="1" selected>1 m</option><option value="2">2 m</option><option value="5">5 m</option><option value="10">10 m</option></select></div>
+        <div><label for="inRotStep">Langkah putar</label><select id="inRotStep"><option value="0.5">0,5°</option><option value="1" selected>1°</option><option value="3">3°</option><option value="10">10°</option></select></div>
+      </div>
+      <div class="grid-btn">
+        <button class="btn" data-mv="w">Barat</button><button class="btn" data-mv="n">Utara</button><button class="btn" data-mv="s">Selatan</button><button class="btn" data-mv="e">Timur</button>
+        <button class="btn" data-mv="rl">Putar ↺</button><button class="btn" data-mv="rr">Putar ↻</button><button class="btn" data-mv="sm">Kecil 1%</button><button class="btn" data-mv="sp">Besar 1%</button>
+      </div>
+      <label class="cek" style="margin-top:12px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas surat ukur</label>
+    </section>
+    <section class="blok">
+      <h3>Simpan ke daftar bidang</h3>
+      <label for="inNama">Nama / NIB bidang</label><input type="text" id="inNama" placeholder="mis. NIB 16010203000123">
+      <div class="dua">
+        <div><label for="inStatus">Status</label><select id="inStatus"><option value="ditemukan">Ditemukan</option><option value="ragu">Ragu-ragu</option><option value="lapangan">Perlu cek lapangan</option><option value="tidak">Tidak ditemukan</option></select></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn pri" id="btnSimpanDaftar" style="width:100%">Simpan hasil</button></div>
+      </div>
+      <label for="inCatatan">Catatan</label><textarea id="inCatatan" placeholder="mis. sisi utara di sketsa tidak sesuai citra"></textarea>
+      <button class="btn" id="btnLanjut" hidden style="width:100%;margin-top:8px">Kerjakan bidang berikutnya di daftar</button>
+    </section>
+    <section class="blok">
+      <h3>Ekspor</h3>
+      <label for="inCrs">Sistem koordinat untuk DXF dan tabel</label>
+      <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
+      <div class="ekspor" style="margin-top:8px">
+        <button class="btn" id="btnDXF">DXF <small>AutoCAD</small></button>
+        <button class="btn" id="btnWorld">Gambar + world file <small>AutoCAD</small></button>
+        <button class="btn" id="btnKML">KML <small>Google Earth</small></button>
+        <button class="btn" id="btnKMZ">KMZ + gambar <small>Google Earth</small></button>
+        <button class="btn" id="btnCSV">Koordinat <small>CSV</small></button>
+        <button class="btn" id="btnGeo">GeoJSON <small>GIS</small></button>
+        <button class="btn" id="btnPNG">Perbandingan <small>PNG</small></button>
+      </div>
+    </section>
+    <section class="blok">
+      <h3>Koordinat titik sudut</h3>
+      <div id="vtx"></div>
+      <label for="inOpa">Kepekatan gambar di panel perbandingan</label><input type="range" id="inOpa" min="0" max="100" value="70" style="width:100%;accent-color:var(--teal)">
+    </section>
   </div>
 </aside>
 <main>
   <div class="pane" id="cmpWrap"><canvas id="cmp"></canvas>
-    <div class="legend"><i style="background:#ef4444"></i>Jalan sketsa<i style="background:#22d3ee"></i>Jalan OSM (dipindah ke sketsa)<i style="background:#a855f7"></i>Bidang</div></div>
+    <div class="legend"><i style="background:#ef4444"></i>Jalan pada gambar<i style="background:#0e8fb3"></i>Jalan nyata<i style="background:#a855f7"></i>Bidang<i style="background:#c8641a"></i>Bidang lain</div></div>
   <div class="pane" id="skWrap"><canvas id="sk"></canvas>
-    <div class="tools" id="skTools">
-      <button data-tool="pan">✋ Geser</button>
-      <button data-tool="road" class="on">🛣️ Jalan</button>
-      <button data-tool="parcel">⬛ Bidang</button>
-      <button data-tool="cp">📍 Titik ikat</button>
-      <button data-tool="edit">✏️ Edit</button>
-      <button id="skFinish">✔ Selesai (Enter)</button>
-      <button id="skUndo">↶ Hapus titik (⌫)</button>
-      <button id="skFit">⤢ Pas</button>
-      <button id="skClear" class="dan">🗑 Semua</button>
+    <div class="tools" id="skTools" role="toolbar" aria-label="Alat gambar">
+      <button data-tool="pan">Geser</button>
+      <button data-tool="road" class="on"><i style="background:#ef4444"></i>Jalan</button>
+      <button data-tool="parcel"><i style="background:#a855f7"></i>Bidang</button>
+      <button data-tool="parcel2"><i style="background:#c8641a"></i>Bidang lain</button>
+      <button data-tool="cp"><i style="background:#facc15;border-radius:50%"></i>Titik ikat</button>
+      <button data-tool="edit">Ubah titik</button>
+      <span class="sep"></span>
+      <button id="skFinish" title="Enter">Selesai</button>
+      <button id="skUndo" title="Backspace">Hapus titik</button>
+      <button id="skFit">Pas layar</button>
+      <button id="skClear" style="color:var(--merah)">Hapus semua</button>
     </div>
-    <div class="legend" id="skLegend">Edit: seret titik; klik kanan titik = hapus titik.</div>
+    <div class="legend" id="skLegend" style="max-width:calc(100% - 380px)">Gulir untuk memperbesar. Seret dengan tombol tengah atau alat Geser.</div>
   </div>
   <div class="pane show" id="mapWrap"><div id="map"></div></div>
+  <div id="kop" aria-live="polite">
+    <div class="judul"><b data-k="bidang">Bidang belum dipilih</b><button id="kopToggle" title="Ciutkan / buka">ciutkan</button></div>
+    <dl>
+      <div><dt>Kelurahan</dt><dd data-k="wil">–</dd></div><div><dt>Kualitas data</dt><dd data-k="kw">–</dd></div>
+      <div><dt>Luas surat ukur</dt><dd data-k="luas">–</dd></div><div><dt>Luas poligon</dt><dd data-k="hasil">–</dd></div>
+      <div><dt>Skor kecocokan</dt><dd data-k="skor">–</dd></div><div><dt>Status</dt><dd><span class="st st-belum" data-k="status">–</span></dd></div>
+      <div class="lebar"><dt>Sistem koordinat ekspor</dt><dd data-k="crs">–</dd></div>
+    </dl>
+  </div>
 </main>
 </div>
 
+<div id="laci" role="dialog" aria-label="Daftar bidang">
+  <div class="kepala">
+    <div class="row"><h2 style="margin:0">Daftar bidang</h2><button class="btn nf" id="laciClose">Tutup</button></div>
+    <p class="hint" id="listCount"></p>
+    <div class="row">
+      <label class="btn nf" style="margin:0">Impor daftar (Excel/CSV)…<input type="file" id="fileList" accept=".xlsx,.xls,.csv,.txt" hidden></label>
+      <input type="search" id="listSearch" placeholder="Cari NIB, nomor hak, kelurahan…">
+      <select id="listFilter" class="nf" style="width:190px"><option value="semua">Semua status</option><option value="belum">Belum dikerjakan</option><option value="ditemukan">Ditemukan</option><option value="ragu">Ragu-ragu</option><option value="lapangan">Perlu cek lapangan</option><option value="tidak">Tidak ditemukan</option></select>
+    </div>
+  </div>
+  <div class="isi"><table><thead><tr><th>NIB</th><th>Nomor hak</th><th class="num">Luas (m²)</th><th>Kelurahan</th><th>KW</th><th>Status</th></tr></thead><tbody id="listBody"></tbody></table></div>
+  <div class="kaki">
+    <button class="btn" id="btnRekapXlsx">Rekap Excel</button><button class="btn" id="btnRekapCsv">Rekap CSV</button>
+    <button class="btn" id="btnAllDxf">Semua hasil ke DXF</button><button class="btn" id="btnAllKml">Semua hasil ke KML</button>
+    <span class="sp"></span><button class="btn dan" id="btnListClear">Kosongkan daftar</button>
+  </div>
+</div>
+
 <div id="log">
-  <div class="bar"><b>Log aplikasi</b><span class="hint">— kirimkan file log ini bila ada masalah</span><span class="sp" style="flex:1"></span>
-    <button id="logCopy">Salin</button><button id="logDl" class="pri">⬇️ Unduh log (.txt)</button><button id="logClear">Bersihkan</button><button id="logClose">Tutup</button></div>
+  <div class="bar"><b>Log aplikasi</b><span class="hint" style="margin:0 0 0 6px">Kirim file log ini bila ada masalah.</span><span class="sp"></span>
+    <button class="btn kecil" id="logCopy">Salin</button><button class="btn kecil pri" id="logDl">Unduh log</button><button class="btn kecil" id="logClear">Bersihkan</button><button class="btn kecil" id="logClose">Tutup</button></div>
   <pre id="logPre"></pre>
 </div>
-<div id="toast"></div>
+<div id="toast" role="status"></div>
 
 <script>
 /*CORE*/
 </script>
 <script>
 /*APP*/
+</script>
+<script>
+/*FITUR*/
 </script>
 </body>
 </html>

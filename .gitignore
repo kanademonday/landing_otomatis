@@ -6,3 +6,5 @@ tests/e2e/log.txt
 __pycache__/
 node_modules/
 tests/e2e/data/
+tests/e2e/*.csv
+tests/e2e/*.dxf

@@ -54,12 +54,13 @@ async def main():
     await pg.click('[data-mv="n"]');await pg.click('[data-mv="rl"]')
     await pg.screenshot(path=D+'s4.png')
     await pg.click('#btnKMZ');await pg.wait_for_timeout(300)
-    for bid in ['#btnKML','#btnCSV','#btnGeo','#btnPNG','#btnSave']:
+    for bid in ['#btnKML','#btnCSV','#btnGeo','#btnPNG','#btnDXF','#btnWorld','#btnSave']:
+      if bid=='#btnSave': await pg.click('#btnMenu')
       async with pg.expect_download() as dl: await pg.click(bid)
       d=await dl.value; await d.save_as(D+'out_'+d.suggested_filename); print('dl',d.suggested_filename)
     await pg.click('#btnNew');await pg.wait_for_timeout(200)
     print('bidang baru -> img',await pg.evaluate("S.img"),'roads',await pg.evaluate("S.roads.length"),'osm tetap',await pg.evaluate("!!S.osm"),'step',await pg.evaluate("STEP"))
-    await pg.click('#btnLog')
+    await pg.click('#btnMenu');await pg.click('#btnLog')
     async with pg.expect_download() as dl: await pg.click('#logDl')
     d=await dl.value; await d.save_as(D+'log.txt')
     await pg.screenshot(path=D+'slog.png')

@@ -25,6 +25,7 @@ async def main():
       await pg.wait_for_function("!document.getElementById('btnJalan').disabled",timeout=20000)
       print('tanpa data tersimpan -> wilayah via Nominatim:',await pg.evaluate("S.wil.name"))
       if mode=='api':
+        await pg.evaluate("document.querySelectorAll('details').forEach(d=>d.open=true)")
         await pg.click('#btnJalan');await pg.wait_for_function("S.osm!==null",timeout=60000)
         print('API:',await pg.inner_text('#jalanInfo'),'| calls',calls['api'])
       else:
