@@ -2,6 +2,11 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.9.0 — 2026-11-20 — Bidang hasil AI lebih tepat, peta hasil tidak lagi menampilkan seluruh dunia
+- Telusur bidang dua tahap: setelah AI menunjuk bidang pada gambar utuh, gambar dipotong dan diperbesar di sekitar bidang, lalu AI diminta menunjuk sudutnya lagi (satu panggilan Groq tambahan, tetap gratis).
+- Perapatan ke garis kini menolak garis yang terus melewati sudut (ciri garis jalan), dan jangkauan geser diperkecil, agar bidang tidak "menempel" ke garis jalan.
+- Perbaikan: setelah Digitasi otomatis, peta hasil kadang tampil seluruh dunia (peta disesuaikan saat masih tersembunyi). Penyesuaian kini ditunda sampai peta tampil.
+
 ## v2.8.1 — 2026-11-20
 - Pilihan Claude dihapus dari pengaturan AI (API Claude berbayar terpisah dari langganan claude.ai). Layanan AI kembali ke Groq (gratis) atau Ollama.
 - Perbaikan v2.8.0 tetap berlaku untuk Groq/Ollama: bidang dirapatkan ke garis gambar, "Tanah Hak" dsb. tidak dianggap jalan, hasil baca disimpan agar tidak membaca ulang.

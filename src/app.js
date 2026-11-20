@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.8.1';
+const APP_VERSION = '2.9.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -156,7 +156,7 @@ function go(n) {
   $('cmpWrap').classList.toggle('show', n === 4);
   if (n === 3) renderReady();
   if (typeof updateKop === 'function') updateKop();
-  setTimeout(() => { map && map.invalidateSize(); skResize(); cmpDraw(); if (typeof aturOverlay === 'function') aturOverlay(); }, 60);
+  setTimeout(() => { map && map.invalidateSize(); if (S.tundaFit && map && $('mapWrap').offsetWidth && S.sel >= 0 && S.cands[S.sel]) { S.tundaFit = false; selectCand(S.sel, true); } skResize(); cmpDraw(); if (typeof aturOverlay === 'function') aturOverlay(); }, 60);
   LOG.info('Pindah ke langkah ' + n);
 }
 function markDone() {
@@ -944,7 +944,11 @@ function drawCands() {
 function selectCand(i, fly) {
   S.sel = i; S.T = { ...S.cands[i].T }; S.adj = { dx: 0, dy: 0, dth: 0 };
   renderCands(); drawCands(); renderResult();
-  if (fly && map) { const ll = toLL(parcelWorld(S.T, false)); map.fitBounds(L.latLngBounds(ll).pad(4), { maxZoom: 19 }); }
+  if (fly && map) {
+    // peta tersembunyi (mis. pencocokan dijalankan dari langkah 2) → ukurannya 0 dan fitBounds memperkecil ke seluruh dunia; tunda sampai tampil
+    if (!$('mapWrap').offsetWidth) S.tundaFit = true;
+    else { const ll = toLL(parcelWorld(S.T, false)); map.fitBounds(L.latLngBounds(ll).pad(4), { maxZoom: 19 }); }
+  }
   LOG.info('Kandidat dipilih: ' + S.cands[i].label, { T: S.T }); markDone();
 }
 

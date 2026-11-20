@@ -1036,7 +1036,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.8.1';
+const APP_VERSION = '2.9.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1193,7 +1193,7 @@ function go(n) {
   $('cmpWrap').classList.toggle('show', n === 4);
   if (n === 3) renderReady();
   if (typeof updateKop === 'function') updateKop();
-  setTimeout(() => { map && map.invalidateSize(); skResize(); cmpDraw(); if (typeof aturOverlay === 'function') aturOverlay(); }, 60);
+  setTimeout(() => { map && map.invalidateSize(); if (S.tundaFit && map && $('mapWrap').offsetWidth && S.sel >= 0 && S.cands[S.sel]) { S.tundaFit = false; selectCand(S.sel, true); } skResize(); cmpDraw(); if (typeof aturOverlay === 'function') aturOverlay(); }, 60);
   LOG.info('Pindah ke langkah ' + n);
 }
 function markDone() {
@@ -1981,7 +1981,11 @@ function drawCands() {
 function selectCand(i, fly) {
   S.sel = i; S.T = { ...S.cands[i].T }; S.adj = { dx: 0, dy: 0, dth: 0 };
   renderCands(); drawCands(); renderResult();
-  if (fly && map) { const ll = toLL(parcelWorld(S.T, false)); map.fitBounds(L.latLngBounds(ll).pad(4), { maxZoom: 19 }); }
+  if (fly && map) {
+    // peta tersembunyi (mis. pencocokan dijalankan dari langkah 2) → ukurannya 0 dan fitBounds memperkecil ke seluruh dunia; tunda sampai tampil
+    if (!$('mapWrap').offsetWidth) S.tundaFit = true;
+    else { const ll = toLL(parcelWorld(S.T, false)); map.fitBounds(L.latLngBounds(ll).pad(4), { maxZoom: 19 }); }
+  }
   LOG.info('Kandidat dipilih: ' + S.cands[i].label, { T: S.T }); markDone();
 }
 
@@ -2916,6 +2920,7 @@ const telusuriOtomatis = safe('Telusuri otomatis', async () => {
     if (dibuang.length) LOG.info('Garis bernama bukan jalan diabaikan', dibuang);
     const roads = (J.jalan || []).filter(j => !bukanJalan(j.nama)).map(j => ({ name: j.nama || '', pts: (j.titik || []).map(ke).filter(Boolean) })).filter(r => r.pts.length >= 2);
     let parcel = (J.bidang || []).map(ke).filter(Boolean);
+    if (parcel.length >= 3) parcel = await perjelasBidang(parcel);
     if (parcel.length >= 3) parcel = rapatkanBidang(parcel);
     let n = 0;
     if (roads.length) { S.roads = roads; n++; }
@@ -3006,14 +3011,27 @@ function rapatkanBidang(poly) {
     const P0 = poly.map(p => [p[0] * M.k, p[1] * M.k]), c = CORE.centroid(P0), uk = Math.sqrt(Math.abs(CORE.polyArea(P0)));
     if (!(uk > 8)) return poly;
     const ubah = (P, dx, dy, th, sc) => { const co = Math.cos(th) * sc, si = Math.sin(th) * sc; return P.map(p => { const x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + co * x - si * y + dx, c[1] + si * x + co * y + dy]; }); };
+    const terus = P => { // garis yang terus melewati sudut = kemungkinan garis jalan, bukan batas bidang
+      let n = 0, a = 0;
+      for (let i = 0; i < P.length; i++) {
+        const p = P[i], q = P[(i + 1) % P.length], L1 = Math.hypot(q[0] - p[0], q[1] - p[1]); if (L1 < 4) continue;
+        const ux = (q[0] - p[0]) / L1, uy = (q[1] - p[1]) / L1, panj = Math.max(6, 0.15 * L1);
+        for (let t = 3; t <= panj; t += 2) for (const [bx, by, sg] of [[q[0], q[1], 1], [p[0], p[1], -1]]) {
+          const x = Math.round(bx + sg * ux * t), y = Math.round(by + sg * uy * t); n++;
+          if (x >= 0 && y >= 0 && x < M.w && y < M.h && M.d[y * M.w + x] < 1.5) a++;
+        }
+      }
+      return n ? a / n : 0;
+    };
+    const nilai = P => jarakSisi(P, M, tau) + 0.35 * tau * terus(P);
     const awal = jarakSisi(P0, M, tau);
     if (awal < 1) { LOG.info('Bidang hasil AI sudah menempel pada garis gambar', { jarak_px: +awal.toFixed(2) }); return poly; }
-    let best = { e: awal, dx: 0, dy: 0, th: 0, sc: 1 };
-    const R = 0.45 * uk, st = Math.max(1.5, uk / 30);
+    let best = { e: nilai(P0), dx: 0, dy: 0, th: 0, sc: 1 };
+    const R = 0.3 * uk, st = Math.max(1.5, uk / 30);
     for (let sc = 0.85; sc <= 1.151; sc += 0.05) for (let a = -6; a <= 6; a += 2) {
       const th = a * Math.PI / 180;
       for (let dx = -R; dx <= R; dx += st) for (let dy = -R; dy <= R; dy += st) {
-        const e = jarakSisi(ubah(P0, dx, dy, th, sc), M, tau);
+        const e = nilai(ubah(P0, dx, dy, th, sc));
         if (e < best.e) best = { e, dx, dy, th, sc };
       }
     }
@@ -3023,7 +3041,7 @@ function rapatkanBidang(poly) {
       while (maju) { maju = false;
         for (const [ddx, ddy, dth, dsc] of [[h, 0, 0, 0], [-h, 0, 0, 0], [0, h, 0, 0], [0, -h, 0, 0], [0, 0, 0.005, 0], [0, 0, -0.005, 0], [0, 0, 0, 0.01], [0, 0, 0, -0.01]]) {
           const q = { dx: best.dx + ddx, dy: best.dy + ddy, th: best.th + dth, sc: best.sc + dsc };
-          const e = jarakSisi(ubah(P0, q.dx, q.dy, q.th, q.sc), M, tau);
+          const e = nilai(ubah(P0, q.dx, q.dy, q.th, q.sc));
           if (e < best.e - 1e-6) { best = { e, ...q }; maju = true; }
         }
       }
@@ -3031,8 +3049,8 @@ function rapatkanBidang(poly) {
     let P = ubah(P0, best.dx, best.dy, best.th, best.sc);
     // tiap sudut digeser sedikit (±4 px) agar sisi-sisinya menempel
     for (let it = 0; it < 3; it++) for (let i = 0; i < P.length; i++) {
-      let bi = P[i], be = jarakSisi(P, M, tau);
-      for (let ox = -4; ox <= 4; ox++) for (let oy = -4; oy <= 4; oy++) { const Q = P.slice(); Q[i] = [P[i][0] + ox * 0.5, P[i][1] + oy * 0.5]; const e = jarakSisi(Q, M, tau); if (e < be) { be = e; bi = Q[i]; } }
+      let bi = P[i], be = nilai(P);
+      for (let ox = -4; ox <= 4; ox++) for (let oy = -4; oy <= 4; oy++) { const Q = P.slice(); Q[i] = [P[i][0] + ox * 0.5, P[i][1] + oy * 0.5]; const e = nilai(Q); if (e < be) { be = e; bi = Q[i]; } }
       P[i] = bi;
     }
     const akhir = jarakSisi(P, M, tau);
@@ -3040,6 +3058,29 @@ function rapatkanBidang(poly) {
     LOG.info('Rapatkan bidang ke garis gambar', { jarakAwal_px: +awal.toFixed(2), jarakAkhir_px: +akhir.toFixed(2), geser_px: +(Math.hypot(best.dx, best.dy) / M.k).toFixed(1), putar_deg: +(best.th * 180 / Math.PI).toFixed(1), skala: +best.sc.toFixed(3), dipakai: terima, ms: Math.round(performance.now() - t0) });
     return terima ? P.map(p => [p[0] / M.k, p[1] / M.k]) : poly;
   } catch (e) { LOG.warn('Rapatkan bidang gagal, dipakai hasil AI apa adanya', e.message); return poly; }
+}
+
+/* ---------- tahap 2: potong gambar di sekitar bidang dan minta AI menunjuk sudutnya lagi (lebih teliti) ---------- */
+const PROMPT_BIDANG = `Ini potongan gambar situasi surat ukur lama, diperbesar di sekitar bidang tanah utama. Koordinat memakai skala 0–1000 terhadap potongan ini (x dari kiri, y dari atas).
+Tunjukkan titik-titik SUDUT bidang tanah utama, berurutan mengelilinginya, sebagai [x,y]. Bidang utama adalah poligon yang sudutnya diberi nomor kecil (1, 2, 3, 4 …), batasnya garis tegas dan sering diwarnai/distabilo. Letakkan titik TEPAT di perpotongan garis batas.
+Yang BUKAN batas bidang: garis-garis jalan (dua garis sejajar panjang, biasanya bertulisan "Jalan …"), rumah/bangunan di dalam bidang (kotak kecil berarsir), dan tulisan.`;
+async function perjelasBidang(parcel) {
+  try {
+    const xs = parcel.map(p => p[0]), ys = parcel.map(p => p[1]);
+    const bw = Math.max(...xs) - Math.min(...xs), bh = Math.max(...ys) - Math.min(...ys), m = 0.7 * Math.max(bw, bh, 40);
+    const x0 = Math.max(0, Math.min(...xs) - m), y0 = Math.max(0, Math.min(...ys) - m), x1 = Math.min(S.img.w, Math.max(...xs) + m), y1 = Math.min(S.img.h, Math.max(...ys) + m);
+    AI._potong = { x0, y0, x1, y1 };
+    const k = Math.min(3, 1000 / Math.max(x1 - x0, y1 - y0)), cv = document.createElement('canvas');
+    cv.width = Math.round((x1 - x0) * k); cv.height = Math.round((y1 - y0) * k);
+    const c = cv.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, cv.width, cv.height); c.drawImage(imgEl, x0, y0, x1 - x0, y1 - y0, 0, 0, cv.width, cv.height);
+    const J = await panggilAI(cv.toDataURL('image/jpeg', 0.92).split(',')[1], PROMPT_BIDANG,
+      { type: 'object', properties: { bidang: { type: 'array', items: { type: 'array', items: { type: 'number' } } } }, required: ['bidang'] }, 600);
+    const P = (J.bidang || []).filter(p => Array.isArray(p) && isFinite(p[0]) && isFinite(p[1])).map(p => [x0 + Math.max(0, Math.min(1000, p[0])) / 1000 * (x1 - x0), y0 + Math.max(0, Math.min(1000, p[1])) / 1000 * (y1 - y0)]);
+    if (P.length < 3) { LOG.warn('Tahap 2 (potongan) tidak memberi bidang; dipakai hasil tahap 1'); return parcel; }
+    const a1 = Math.abs(CORE.polyArea(parcel)), a2 = Math.abs(CORE.polyArea(P)), d = Math.hypot(CORE.centroid(P)[0] - CORE.centroid(parcel)[0], CORE.centroid(P)[1] - CORE.centroid(parcel)[1]);
+    LOG.info('Bidang diperjelas dari potongan gambar', { titik: P.length, rasioLuas: +(a2 / a1).toFixed(2), geser_px: Math.round(d) });
+    return P;
+  } catch (e) { LOG.warn('Tahap 2 (potongan) gagal, dipakai hasil tahap 1', e.message); return parcel; }
 }
 
 </script>
