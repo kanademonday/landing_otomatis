@@ -858,10 +858,30 @@ const CORE = (() => {
       }
     }
     const rev = rn ? rc / rn : 1;
+    // jalan nyata yang menembus bidang (bagian tengahnya) = posisi tidak mungkin
+    let tembus = 0;
+    if (ctx.parcelIn) {
+      const q = ctx.parcelIn, bb2 = q.bb;
+      let ax0 = Infinity, ay0 = Infinity, ax1 = -Infinity, ay1 = -Infinity;
+      for (const [x, y] of [[bb2[0], bb2[1]], [bb2[2], bb2[1]], [bb2[2], bb2[3]], [bb2[0], bb2[3]]]) { const w = fwdT(T, x, y); ax0 = Math.min(ax0, w[0]); ax1 = Math.max(ax1, w[0]); ay0 = Math.min(ay0, w[1]); ay1 = Math.max(ay1, w[1]); }
+      const k0 = Math.max(0, Math.floor((ax0 - B.bb.minx) / B.cell)), k1 = Math.min(B.nx - 1, Math.floor((ax1 - B.bb.minx) / B.cell));
+      const l0 = Math.max(0, Math.floor((ay0 - B.bb.miny) / B.cell)), l1 = Math.min(B.ny - 1, Math.floor((ay1 - B.bb.miny) / B.cell));
+      for (let j = l0; j <= l1; j++) for (let i = k0; i <= k1; i++) {
+        const cell = j * B.nx + i;
+        for (let k = B.start[cell]; k < B.start[cell + 1]; k++) {
+          const it = B.items[k], dx = B.xs[it] - T.tx, dy = B.ys[it] - T.ty;
+          const mx = (cs * dx + ss * dy) / T.s, my = (-ss * dx + cs * dy) / T.s;
+          if (mx < bb2[0] || mx > bb2[2] || my < bb2[1] || my > bb2[3]) continue;
+          let c = false; const P2 = q.pts;
+          for (let a = 0, b = P2.length - 1; a < P2.length; b = a++) { const u = P2[a], v = P2[b]; if ((u[1] > my) !== (v[1] > my) && mx < (v[0] - u[0]) * (my - u[1]) / (v[1] - u[1]) + u[0]) c = !c; }
+          if (c) tembus++;
+        }
+      }
+    }
     const wr = ctx.wRev;
     let ovl = 0;
     if (ctx.ref && ctx.ref.length && ctx.parcelSamples) ovl = overlapFrac(ctx.parcelSamples.map(p => fwdT(T, p[0], p[1])), ctx.ref);
-    return { score: 1 - ((1 - wr) * fwd + wr * rev) - 0.6 * ovl, fwd, rev, ovl, within: within / n, dev: dev / n, nRev: rn };
+    return { score: 1 - ((1 - wr) * fwd + wr * rev) - 0.6 * ovl - 0.1 * Math.min(3, tembus), fwd, rev, ovl, tembus, within: within / n, dev: dev / n, nRev: rn };
   }
 
   function refine(ctx, T0, bounds, iters = 80) {
@@ -1023,7 +1043,8 @@ const CORE = (() => {
     const ref = (I.refXY || []).map(pts => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return { pts, bb: [a, b, c, d] }; });
     if (ref.length) log('info', `Bidang referensi untuk cek tumpang tindih: ${ref.length}`);
     return { fields, sk, sub, skF, cov, osm, osmSamples, skJ, osJ, longest, tau: I.tau, wRev: I.wRev ?? 0.3, inArea: I.inArea, parcelC: centroid(parcelM), roadsM, parcelM, bb,
-      ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null };
+      ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null,
+      parcelIn: (() => { const c = centroid(parcelM), pts = parcelM.map(p => [c[0] + (p[0] - c[0]) * 0.75, c[1] + (p[1] - c[1]) * 0.75]); return { pts, bb: [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))] }; })() };
   }
   const CORE_normName = normName;
 
@@ -1036,7 +1057,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -3101,7 +3122,8 @@ function rapatkanJalan(roads, parcel) {
     const dalam = (x, y) => { if (!Pm) return false; let c = false; for (let i = 0, j = Pm.length - 1; i < Pm.length; j = i++) { const a = Pm[i], b = Pm[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; };
     const ringkas = [];
     for (const r of roads) {
-      const P = r.pts.map(p => [p[0] * M.k, p[1] * M.k]), segBaru = [], info = [];
+      // garis AI yang hampir lurus disederhanakan dulu (belokan kecil = derau)
+      const P = sederhanakan(r.pts.map(p => [p[0] * M.k, p[1] * M.k]), 0.012 * Math.hypot(M.w, M.h)), segBaru = [], info = [], lebar = [];
       for (let i = 0; i < P.length - 1; i++) {
         const a = P[i], b = P[i + 1], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
         const ux = (b[0] - a[0]) / (len || 1), uy = (b[1] - a[1]) / (len || 1), nx = -uy, ny = ux;
@@ -3111,7 +3133,7 @@ function rapatkanJalan(roads, parcel) {
           for (let o = -D; o <= D + 1; o++) { const ada = o <= D && tinta(x + nx * o, y + ny * o); if (ada && m0 === null) m0 = o; if (!ada && m0 !== null) { gr.push((m0 + o - 1) / 2); m0 = null; } }
           smp.push({ t, gr });
         }
-        if (len < 15 || smp.length < 5) { segBaru.push([a, b]); info.push(null); continue; }
+        if (len < 15 || smp.length < 5) { segBaru.push([a, b]); info.push(null); lebar.push(null); continue; }
         // Hough sederhana: tiap garis tinta lurus = puncak pada (kemiringan, jarak) — garis tepi jalan boleh sedikit tidak sejajar
         const tm = len / 2, nb = Math.ceil(D) + 2, SL = [];
         for (let sl = -0.25; sl <= 0.2501; sl += 0.01) SL.push(+sl.toFixed(2));
@@ -3125,6 +3147,9 @@ function rapatkanJalan(roads, parcel) {
           for (let da = -2; da <= 2 && maks; da++) for (let dk = -2; dk <= 2; dk++) { if (!da && !dk) continue; const w = nil(a2 + da, k + dk); if (w > v || (w === v && (da < 0 || (!da && dk < 0)))) { maks = false; break; } }
           if (maks) garis.push({ o: k * 2 - D, sl: SL[a2], v });
         }
+        // garis tepi jalan menerus panjang; tulisan (nama jalan) hanya potongan-potongan pendek → dibuang
+        const runPanjang = g => { let run = 0, maks = 0; for (const q of smp) { const e = g.o + g.sl * (q.t - tm); if (q.gr.some(o => Math.abs(o - e) <= 2)) { run++; if (run > maks) maks = run; } else run = 0; } return maks; };
+        for (let gi = garis.length - 1; gi >= 0; gi--) if (runPanjang(garis[gi]) < Math.max(8, 0.2 * smp.length)) garis.splice(gi, 1);
         // buang puncak kembar (garis sama, kemiringan sedikit beda)
         garis.sort((p1, p2) => p2.v - p1.v);
         const unik = [];
@@ -3144,24 +3169,59 @@ function rapatkanJalan(roads, parcel) {
         }
         const adaNama = calon.filter(c => c.berisiNama);
         let pilih = null;
-        if (adaNama.length) pilih = adaNama.reduce((m, c) => Math.abs(c.mid - olab) < Math.abs(m.mid - olab) ? c : m);
+        const adaNamaSebelah = adaNama.filter(c => c.bersebelahan), kumpulan = adaNamaSebelah.length ? adaNamaSebelah : adaNama;
+        if (kumpulan.length) pilih = kumpulan.reduce((m, c) => Math.abs(c.mid - olab) < Math.abs(m.mid - olab) ? c : m);
         else for (const c of calon.filter(c2 => c2.bersebelahan)) if (!pilih || Math.abs(c.mid) < Math.abs(pilih.mid)) pilih = c;
-        if (!pilih) { segBaru.push([a, b]); info.push(null); continue; }
+        if (!pilih) { segBaru.push([a, b]); info.push(null); lebar.push(null); continue; }
+        lebar.push(pilih.g);
         const off = t => pilih.mid + pilih.sl * (t - tm);
         segBaru.push([[a[0] + nx * off(0), a[1] + ny * off(0)], [b[0] + nx * off(len), b[1] + ny * off(len)]]);
         info.push({ lebar_m: mpp ? +(pilih.g * mpp).toFixed(1) : null, geser_px: Math.round(Math.abs(pilih.mid) / M.k) });
       }
       const Q = P.map((p, i) => { const c = [segBaru[i - 1] && segBaru[i - 1][1], segBaru[i] && segBaru[i][0]].filter(Boolean); return [c.reduce((s2, q) => s2 + q[0], 0) / c.length, c.reduce((s2, q) => s2 + q[1], 0) / c.length]; });
+      // perpanjang ujung selama kedua tepi jalan masih tergambar (AI sering hanya menelusuri sebagian jalan)
+      const panjangkan = (ujung, dari, g) => {
+        if (!g) return 0;
+        const ux = ujung[0] - dari[0], uy = ujung[1] - dari[1], l = Math.hypot(ux, uy); if (l < 1) return 0;
+        const dx = ux / l, dy = uy / l, nx = -dy, ny = dx, h = g / 2;
+        const tepi = (x, y, sg) => { for (let e = -3; e <= 3; e++) if (tinta(x + nx * (sg * h + e), y + ny * (sg * h + e))) return true; return false; };
+        let celah = 0, satu = 0, ok = 0;
+        for (let st = 3; st < 0.8 * Math.max(M.w, M.h); st += 3) {
+          const x = ujung[0] + dx * st, y = ujung[1] + dy * st;
+          if (x < 0 || y < 0 || x >= M.w || y >= M.h) break;
+          const a1 = tepi(x, y, 1), a2 = tepi(x, y, -1);
+          if (a1 && a2) { ok = st; celah = 0; satu = 0; }
+          else if (a1 || a2) { satu += 3; if (satu > 8 * g) break; } // simpang: satu tepi terbuka sebentar
+          else if (++celah > 6) break;
+        }
+        if (ok > 0) { ujung[0] += dx * ok; ujung[1] += dy * ok; }
+        return ok;
+      };
+      const tambah = [];
+      if (Q.length >= 2) { tambah.push(Math.round(panjangkan(Q[0], Q[1], lebar[0]) / M.k)); tambah.push(Math.round(panjangkan(Q[Q.length - 1], Q[Q.length - 2], lebar[lebar.length - 1]) / M.k)); }
       r.pts = Q.map(p => [p[0] / M.k, p[1] / M.k]);
-      ringkas.push({ nama: r.name, ruas: info });
+      const gl = lebar.filter(Boolean); r._lebar = gl.length ? gl.reduce((a, b) => a + b, 0) / gl.length / M.k : null;
+      ringkas.push({ nama: r.name, ruas: info, diperpanjang_px: tambah });
     }
-    potongKebablasan(roads);
+    // dukungan tepi jalan pada potongan (dipakai untuk memutuskan ujung mana yang kebablasan)
+    const dukung = (r, p0, p1) => {
+      if (!r._lebar) return 0;
+      const a = [p0[0] * M.k, p0[1] * M.k], b = [p1[0] * M.k, p1[1] * M.k], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 3) return 1;
+      const dx = (b[0] - a[0]) / l, dy = (b[1] - a[1]) / l, nx = -dy, ny = dx, h = r._lebar * M.k / 2;
+      const tepi = (x, y, sg) => { for (let e = -3; e <= 3; e++) if (tinta(x + nx * (sg * h + e), y + ny * (sg * h + e))) return true; return false; };
+      let n = 0, ya = 0;
+      for (let t = 2; t < l; t += 3) { const x = a[0] + dx * t, y = a[1] + dy * t; n++; if (tepi(x, y, 1) && tepi(x, y, -1)) ya++; }
+      return n ? ya / n : 1;
+    };
+    for (let u = 0; u < 4; u++) { const sblm = JSON.stringify(roads.map(r => r.pts)); potongKebablasan(roads, dukung); if (JSON.stringify(roads.map(r => r.pts)) === sblm) break; }
     LOG.info('Jalan dirapatkan ke garis tengah gambar', { jalan: ringkas, ms: Math.round(performance.now() - t0) });
   } catch (e) { LOG.warn('Rapatkan jalan gagal, dipakai hasil AI apa adanya', e.message); }
 }
-// Ujung jalan yang sedikit melewati jalan lain (AI sering meneruskan garis melewati simpang) dipotong di simpang itu
-function potongKebablasan(roads) {
-  const potong = (p1, p2, p3, p4) => { const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]); if (Math.abs(d) < 1e-9) return null; const t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d, u = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d; return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? t : null; };
+// Ujung jalan yang sedikit melewati jalan lain (AI sering meneruskan garis melewati simpang) dipotong di simpang itu.
+// Bila dua jalan sama-sama "kebablasan" di simpang yang sama, yang dipotong hanya yang bagian lanjutannya tidak tergambar.
+function potongKebablasan(roads, dukung) {
+  const potong = (p1, p2, p3, p4) => { const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]); if (Math.abs(d) < 1e-9) return null; const t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d, u = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d; return t >= 0 && t <= 1 && u > 1e-3 && u < 1 - 1e-3 ? t : null; };
+  const calon = [];
   for (const r of roads) for (const ujung of ['awal', 'akhir']) {
     const pts = ujung === 'awal' ? r.pts.slice().reverse() : r.pts, total = CORE.plLen(pts);
     let acc = 0;
@@ -3171,16 +3231,23 @@ function potongKebablasan(roads) {
         for (let j = 0; j < o.pts.length - 1; j++) {
           const t = potong(pts[i], pts[i + 1], o.pts[j], o.pts[j + 1]); if (t === null) continue;
           const sisa = total - (acc + t * l);
-          if (sisa > 0.02 * total && sisa < 0.22 * total) {
+          if (sisa > 0.02 * total && sisa < 0.3 * total) {
             const c = [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * t, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * t];
-            const baru = [...pts.slice(0, i + 1), c];
-            r.pts = ujung === 'awal' ? baru.reverse() : baru;
-            LOG.info('Ujung jalan yang melewati simpang dipotong', { jalan: r.name || '(tanpa nama)', dipotong_persen: Math.round(sisa / total * 100) });
+            calon.push({ r, o, ujung, i, c, sisa: sisa / total, dk: dukung ? dukung(r, c, pts.at(-1)) : 0 });
           }
         }
       }
       acc += l;
     }
+  }
+  for (const k of calon) {
+    if (k.dk > 0.35) continue; // bagian setelah simpang memang tergambar sebagai jalan
+    const lawan = calon.find(x => x.r === k.o && x.o === k.r && Math.hypot(x.c[0] - k.c[0], x.c[1] - k.c[1]) < 5);
+    if (lawan && lawan.dk < k.dk) continue; // jalan satunya yang kebablasan
+    const pts = k.ujung === 'awal' ? k.r.pts.slice().reverse() : k.r.pts, baru = [...pts.slice(0, k.i + 1), k.c];
+    k.r.pts = k.ujung === 'awal' ? baru.reverse() : baru;
+    LOG.info('Ujung jalan yang melewati simpang dipotong', { jalan: k.r.name || '(tanpa nama)', dipotong_persen: Math.round(k.sisa * 100), dukunganTepi: +k.dk.toFixed(2) });
+    break; // satu potongan per panggilan cukup; titik berubah
   }
 }
 /* ---------- nama jalan hasil baca disesuaikan ke nama di peta (ejaan tulisan tangan sering meleset) ---------- */
@@ -3202,6 +3269,15 @@ function koreksiNamaJalan(roads) {
       r.nameAsli = r.name; r.name = urut[0][0];
     } else LOG.info('Nama jalan tidak ada di peta wilayah ini (hanya bentuk yang dipakai)', { terbaca: r.name, terdekat: urut[0] && urut[0][0] });
   }
+}
+
+// Douglas–Peucker
+function sederhanakan(P, tol) {
+  if (P.length <= 2) return P;
+  const a = P[0], b = P[P.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  let im = -1, dm = 0;
+  for (let i = 1; i < P.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - P[i][1]) - (a[0] - P[i][0]) * (b[1] - a[1])) / L; if (d > dm) { dm = d; im = i; } }
+  return dm <= tol ? [a, b] : [...sederhanakan(P.slice(0, im + 1), tol).slice(0, -1), ...sederhanakan(P.slice(im), tol)];
 }
 
 </script>

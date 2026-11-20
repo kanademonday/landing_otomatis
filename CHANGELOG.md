@@ -2,6 +2,12 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.11.0 — 2026-11-20 — Jalan sketsa lebih utuh, posisi tak mungkin ditolak
+- Tulisan nama jalan tidak lagi dianggap garis tepi jalan (garis tepi harus menerus panjang; huruf hanya potongan pendek). Bila AI memberi posisi tulisan nama, dipilih pasangan tepi bersebelahan yang mengapit tulisan itu.
+- Garis jalan AI yang hampir lurus disederhanakan (belokan kecil = derau), lalu **ujungnya diperpanjang** selama kedua tepi jalan masih tergambar; di simpang, satu tepi boleh terbuka sebentar.
+- Pemotongan jalan yang kebablasan kini memeriksa gambar: di simpang, yang dipotong hanya jalan yang lanjutannya tidak tergambar (mis. Jl. Syafi'i dipotong di Jl. Sultan Alimuddin, bukan sebaliknya).
+- Pencocokan menolak posisi di mana jalan nyata menembus bagian tengah bidang (pengurangan skor per titik jalan di dalam bidang).
+
 ## v2.10.0 — 2026-11-20 — Jalan hasil AI dirapatkan ke gambar, nama jalan disesuaikan ke peta
 - **Garis jalan dirapatkan ke gambar**: tiap ruas jalan dari AI digeser ke garis tengah di antara dua garis tepi jalan yang benar-benar tergambar (garis ganda yang rapat digabung, bagian dalam bidang tanah tidak dianggap jalan). AI kini juga memberi posisi tulisan nama jalan, yang dipakai untuk memilih pasangan tepi yang benar.
 - **Ujung jalan yang kebablasan melewati simpang dipotong** (mis. Jl. Syafi'i yang diteruskan AI melewati Jl. Sultan Alimuddin), sehingga bentuk simpang (pertigaan/perempatan) sesuai gambar.

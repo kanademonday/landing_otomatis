@@ -413,10 +413,30 @@ const CORE = (() => {
       }
     }
     const rev = rn ? rc / rn : 1;
+    // jalan nyata yang menembus bidang (bagian tengahnya) = posisi tidak mungkin
+    let tembus = 0;
+    if (ctx.parcelIn) {
+      const q = ctx.parcelIn, bb2 = q.bb;
+      let ax0 = Infinity, ay0 = Infinity, ax1 = -Infinity, ay1 = -Infinity;
+      for (const [x, y] of [[bb2[0], bb2[1]], [bb2[2], bb2[1]], [bb2[2], bb2[3]], [bb2[0], bb2[3]]]) { const w = fwdT(T, x, y); ax0 = Math.min(ax0, w[0]); ax1 = Math.max(ax1, w[0]); ay0 = Math.min(ay0, w[1]); ay1 = Math.max(ay1, w[1]); }
+      const k0 = Math.max(0, Math.floor((ax0 - B.bb.minx) / B.cell)), k1 = Math.min(B.nx - 1, Math.floor((ax1 - B.bb.minx) / B.cell));
+      const l0 = Math.max(0, Math.floor((ay0 - B.bb.miny) / B.cell)), l1 = Math.min(B.ny - 1, Math.floor((ay1 - B.bb.miny) / B.cell));
+      for (let j = l0; j <= l1; j++) for (let i = k0; i <= k1; i++) {
+        const cell = j * B.nx + i;
+        for (let k = B.start[cell]; k < B.start[cell + 1]; k++) {
+          const it = B.items[k], dx = B.xs[it] - T.tx, dy = B.ys[it] - T.ty;
+          const mx = (cs * dx + ss * dy) / T.s, my = (-ss * dx + cs * dy) / T.s;
+          if (mx < bb2[0] || mx > bb2[2] || my < bb2[1] || my > bb2[3]) continue;
+          let c = false; const P2 = q.pts;
+          for (let a = 0, b = P2.length - 1; a < P2.length; b = a++) { const u = P2[a], v = P2[b]; if ((u[1] > my) !== (v[1] > my) && mx < (v[0] - u[0]) * (my - u[1]) / (v[1] - u[1]) + u[0]) c = !c; }
+          if (c) tembus++;
+        }
+      }
+    }
     const wr = ctx.wRev;
     let ovl = 0;
     if (ctx.ref && ctx.ref.length && ctx.parcelSamples) ovl = overlapFrac(ctx.parcelSamples.map(p => fwdT(T, p[0], p[1])), ctx.ref);
-    return { score: 1 - ((1 - wr) * fwd + wr * rev) - 0.6 * ovl, fwd, rev, ovl, within: within / n, dev: dev / n, nRev: rn };
+    return { score: 1 - ((1 - wr) * fwd + wr * rev) - 0.6 * ovl - 0.1 * Math.min(3, tembus), fwd, rev, ovl, tembus, within: within / n, dev: dev / n, nRev: rn };
   }
 
   function refine(ctx, T0, bounds, iters = 80) {
@@ -578,7 +598,8 @@ const CORE = (() => {
     const ref = (I.refXY || []).map(pts => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return { pts, bb: [a, b, c, d] }; });
     if (ref.length) log('info', `Bidang referensi untuk cek tumpang tindih: ${ref.length}`);
     return { fields, sk, sub, skF, cov, osm, osmSamples, skJ, osJ, longest, tau: I.tau, wRev: I.wRev ?? 0.3, inArea: I.inArea, parcelC: centroid(parcelM), roadsM, parcelM, bb,
-      ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null };
+      ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null,
+      parcelIn: (() => { const c = centroid(parcelM), pts = parcelM.map(p => [c[0] + (p[0] - c[0]) * 0.75, c[1] + (p[1] - c[1]) * 0.75]); return { pts, bb: [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))] }; })() };
   }
   const CORE_normName = normName;
 
