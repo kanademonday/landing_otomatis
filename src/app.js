@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -989,7 +989,18 @@ function geoArea(ll) {
   for (let i = 0; i < ll.length; i++) { const p1 = ll[i], p2 = ll[(i + 1) % ll.length]; a += (p2[1] - p1[1]) * DEG * (2 + Math.sin(p1[0] * DEG) + Math.sin(p2[0] * DEG)); }
   return Math.abs(a * R * R / 2);
 }
-function finalLL() { return toLL(parcelWorld(S.T, $('inForce').checked)); }
+// Koordinat akhir bidang dalam sistem koordinat ekspor (TM-3/UTM).
+// Penyamaan luas dilakukan DI BIDANG PROYEKSI ini, sehingga luas di AutoCAD = luas BT/SU.
+function finalXY() {
+  let xy = toLL(parcelWorld(S.T, false)).map(p => CORE.crsFwd(SET.crs, p[0], p[1]));
+  const L0 = getLuas();
+  if ($('inForce').checked && L0) {
+    const c = CORE.centroid(xy), k = Math.sqrt(L0 / CORE.polyArea(xy));
+    xy = xy.map(p => [c[0] + (p[0] - c[0]) * k, c[1] + (p[1] - c[1]) * k]);
+  }
+  return xy;
+}
+function finalLL() { return finalXY().map(q => CORE.crsInv(SET.crs, q[0], q[1])); }
 function renderResult() {
   if (!S.T || !S.parcel || !PROJ) { $('resInfo').textContent = 'Pilih kandidat dulu di langkah 3.'; return; }
   const ctx = ensureCtx();
@@ -1001,10 +1012,10 @@ function renderResult() {
     for (const ex of S.extra) L.polygon(toLL(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))), { color: '#e8892f', weight: 2, dashArray: '6 3', fillOpacity: 0.2 }).bindTooltip(ex.label || 'Bidang tambahan').addTo(G.res);
     L.polygon(finalLL(), { color: '#ff3b30', weight: 3, fillColor: '#ff3b30', fillOpacity: 0.25 }).bindTooltip('Bidang tanah').addTo(G.res);
   }
-  const raw = parcelWorld(S.T, false), fin = parcelWorld(S.T, $('inForce').checked), ll = toLL(fin);
+  const raw = parcelWorld(S.T, false), xy = finalXY(), ll = finalLL();
   const L0 = getLuas(), Araw = CORE.polyArea(raw), Ageo = geoArea(ll);
-  const xy = ll.map(p => CORE.crsFwd(SET.crs, p[0], p[1])), Axy = CORE.polyArea(xy), crsNm = CORE.CRS[SET.crs].nama.split(' (')[0];
-  const sides = fin.map((p, i) => { const q = fin[(i + 1) % fin.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]); });
+  const Axy = CORE.polyArea(xy.map(q => [+q[0].toFixed(4), +q[1].toFixed(4)])), crsNm = CORE.CRS[SET.crs].nama.split(' (')[0];
+  const sides = xy.map((p, i) => { const q = xy[(i + 1) % xy.length]; return Math.hypot(q[0] - p[0], q[1] - p[1]); });
   const c = ll.reduce((a, p) => [a[0] + p[0] / ll.length, a[1] + p[1] / ll.length], [0, 0]);
   const cl = S.sel >= 0 ? conf(S.sel) : ['-', ''];
   $('resInfo').innerHTML = `<b>${esc(S.sel >= 0 ? S.cands[S.sel].label : '-')}</b> <span class="badge ${cl[1]}">${cl[0]}</span><br>
@@ -1014,8 +1025,8 @@ function renderResult() {
     <table style="margin-top:6px"><tr><th style="text-align:left">Luas</th><th>m²</th></tr>
     <tr><td style="text-align:left">Luas diisi (BT/SU)</td><td>${L0 ? fmt(L0, 0) : '-'}</td></tr>
     <tr><td style="text-align:left">Sketsa × skala hasil cocok</td><td>${fmt(Araw, 1)}${L0 ? ` (${Araw >= L0 ? '+' : ''}${fmt((Araw / L0 - 1) * 100, 1)}%)` : ''}</td></tr>
-    <tr><td style="text-align:left">Poligon akhir — geodesik</td><td><b>${fmt(Ageo, 1)}</b></td></tr>
-    <tr><td style="text-align:left">Poligon akhir — bidang ${crsNm}</td><td>${fmt(Axy, 1)}</td></tr></table>
+    <tr><td style="text-align:left">Poligon akhir di ${crsNm} (luas di AutoCAD)</td><td><b>${fmt(Axy, 2)}</b></td></tr>
+    <tr><td style="text-align:left">Poligon akhir — luas di permukaan bumi</td><td>${fmt(Ageo, 1)}</td></tr></table>
     <div class="hint">Panjang sisi: ${sides.map(v => fmt(v, 2)).join(' · ')} m · keliling ${fmt(sides.reduce((a, b) => a + b, 0), 2)} m</div>`;
   $('vtx').innerHTML = `<table><tr><th>No</th><th>Lintang</th><th>Bujur</th><th>X</th><th>Y</th></tr>` +
     ll.map((p, i) => `<tr><td>${i + 1}</td><td>${p[0].toFixed(7)}</td><td>${p[1].toFixed(7)}</td><td>${xy[i][0].toFixed(2)}</td><td>${xy[i][1].toFixed(2)}</td></tr>`).join('') +

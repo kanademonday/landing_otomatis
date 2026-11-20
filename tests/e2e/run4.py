@@ -84,6 +84,13 @@ async def main():
     d = await dl.value; fn = D + 'out_' + d.suggested_filename; await d.save_as(fn)
     xy_dxf = await pg.evaluate("(t)=>CORE.dxfPolylines(t).filter(p=>p.layer==='BIDANG')[0].pts", open(fn).read())
     print('selisih maks clipboard vs DXF (m):', round(max(math.hypot(a[0]-b2[0], a[1]-b2[1]) for a, b2 in zip(xy_clip, xy_dxf)), 4), '| titik', len(xy_clip), len(xy_dxf))
+    def luas(P): return abs(sum(P[i][0]*P[(i+1)%len(P)][1]-P[(i+1)%len(P)][0]*P[i][1] for i in range(len(P))))/2
+    print('luas dari koordinat salinan (seperti AutoCAD):', round(luas(xy_clip), 4), 'm² | diisi', sk['luas'])
+    for crs in ['tm3-50.1', 'utm-50s', 'tm3-50.2']:
+      await pg.select_option('#inCrs', crs); await pg.select_option('#inAcadFmt', 'teks'); await pg.click('#btnCopyAcad'); await pg.wait_for_timeout(120)
+      t = await pg.evaluate("navigator.clipboard.readText()")
+      P = [tuple(map(float, m.split(','))) for m in _re.findall(r'_non ([\d.]+,[\d.]+)', t)]
+      print('  ', crs, 'luas AutoCAD =', round(luas(P), 4))
     print('geser halus hilang:', await pg.evaluate("!document.querySelector('[data-mv]') && !document.getElementById('btnSejajar')"))
     await pg.screenshot(path=D + 'v22_langkah4.png')
     print('page errors:', errs, '| LOG.errors', await pg.evaluate("LOG.errors"))

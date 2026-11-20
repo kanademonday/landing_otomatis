@@ -8,10 +8,10 @@ function cornersCRS() { // sudut gambar → koordinat CRS
 const ekspDXF = safe('Ekspor DXF', async () => {
   needResult();
   const toXY = pts => pts.map(w => { const ll = PROJ.inv(w[0], w[1]); return CORE.crsFwd(SET.crs, ll[0], ll[1]); });
-  const fin = toXY(parcelWorld(S.T, $('inForce').checked));
+  const fin = finalXY();
   const items = [{ layer: 'BIDANG', pts: fin, closed: true }], texts = [];
   const nama = $('inNama').value.trim() || 'Bidang';
-  texts.push({ layer: 'LABEL', at: CORE.centroid(fin), h: 1.5, text: nama + ' L=' + geoArea(finalLL()).toFixed(1) });
+  texts.push({ layer: 'LABEL', at: CORE.centroid(fin), h: 1.5, text: nama + ' L=' + CORE.polyArea(fin).toFixed(2) });
   fin.forEach((p, i) => texts.push({ layer: 'NOMOR_TITIK', at: p, h: 0.8, text: String(i + 1) }));
   for (const ex of S.extra) {
     const xy = toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1])));
@@ -50,7 +50,7 @@ function cekKewajaran(r) {
 function updateKop() {
   const k = $('kop'); if (!k) return;
   const cand = S.sel >= 0 ? S.cands[S.sel] : null, r = cand && (cand.rNow || cand.r);
-  const luasHasil = S.T && S.parcel && PROJ ? geoArea(finalLL()) : null;
+  const luasHasil = S.T && S.parcel && PROJ ? CORE.polyArea(finalXY()) : null;
   k.querySelector('[data-k=bidang]').textContent = $('inNama').value.trim() || 'Bidang tanpa nama';
   k.querySelector('[data-k=wil]').textContent = $('inKel').value ? kelLabel() : 'Pilih kelurahan';
   k.querySelector('[data-k=luas]').textContent = getLuas() ? fmt(getLuas(), 0) + ' m²' : '–';
@@ -224,12 +224,12 @@ function tandaiDisesuaikan() { if (S.sel >= 0 && !S.cands[S.sel].label.includes(
 function poligonAcad() {
   needResult();
   const toXY = pts => pts.map(w => { const ll = PROJ.inv(w[0], w[1]); return CORE.crsFwd(SET.crs, ll[0], ll[1]); });
-  const polys = [toXY(parcelWorld(S.T, $('inForce').checked))];
+  const polys = [finalXY()];
   for (const ex of S.extra) polys.push(toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))));
   return polys;
 }
 function perintahAcad() {
-  const polys = poligonAcad(), f = v => v.toFixed(3);
+  const polys = poligonAcad(), f = v => v.toFixed(4);
   if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
     return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ');
   const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');

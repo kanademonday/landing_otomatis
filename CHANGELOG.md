@@ -2,6 +2,11 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.4.1 — 2026-11-20 — Luas di AutoCAD tepat
+- **Perbaikan:** luas di AutoCAD sedikit lebih besar dari luas BT/SU (mis. 444,14 untuk 444 m²) karena faktor skala proyeksi TM-3 (±1,00018 di Samarinda). Penyamaan luas kini dilakukan langsung di koordinat TM-3/UTM yang diekspor, sehingga *Area* di AutoCAD = luas yang diisi (selisih < 0,001 m²).
+- Koordinat salinan dan DXF ditulis dengan 4 desimal (0,1 mm).
+- Tabel luas di langkah Hasil dan kop gambar menampilkan luas di bidang TM-3 (sama dengan AutoCAD); luas di permukaan bumi tetap ditampilkan sebagai pembanding.
+
 ## v2.4.0 — 2026-11-20 — Nama jalan hanya sebagai petunjuk
 - Nama jalan pada gambar lama bisa sudah berganti, dan tidak ada catatan kapan. Kini bila nama jalan diisi, aplikasi mencari **dua kali** (bentuk jalan saja, dan dengan nama), menggabungkan kandidatnya, dan **mengurutkan berdasarkan bentuk jalan**. Nama hanya memberi sedikit bobot tambahan.
 - Tiap kandidat diberi tanda **nama jalan cocok** / **nama jalan tidak cocok**. Pemeriksaan hasil menjelaskan bila nama tidak cocok (kemungkinan nama sudah berubah) atau bila nama cocok di kandidat lain.
