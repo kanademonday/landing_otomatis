@@ -2,6 +2,10 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.8.1 — 2026-11-20
+- Pilihan Claude dihapus dari pengaturan AI (API Claude berbayar terpisah dari langganan claude.ai). Layanan AI kembali ke Groq (gratis) atau Ollama.
+- Perbaikan v2.8.0 tetap berlaku untuk Groq/Ollama: bidang dirapatkan ke garis gambar, "Tanah Hak" dsb. tidak dianggap jalan, hasil baca disimpan agar tidak membaca ulang.
+
 ## v2.8.0 — 2026-11-20 — Claude, bidang dirapatkan ke garis, hemat token
 - Layanan AI baru **Claude** (berbayar, lebih teliti). Model bawaan `claude-haiku-5-5`; `claude-sonnet-5-5` untuk tulisan tangan sulit. Kunci API disimpan terpisah per layanan, hanya di browser.
 - Hemat token: semua halaman satu berkas dibaca dalam **satu permintaan**, gambar dibatasi 1568 px, jawaban terstruktur dengan batas panjang, dan **hasil baca disimpan** sehingga membuka berkas yang sama tidak memanggil AI lagi ("Baca ulang" untuk memaksa). Pemakaian token dan perkiraan biaya tampil di pengaturan AI.

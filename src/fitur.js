@@ -393,6 +393,7 @@ try {
   const v = JSON.parse(localStorage.getItem('plotkw.ai') || '{}');
   AI.prov = v.prov || AI.prov; AI.url = v.url || AI.url;
   AI.keys = v.keys || (v.key ? { [v.prov || 'groq']: v.key } : {}); AI.models = v.models || (v.model ? { [v.prov || 'groq']: v.model } : {});
+  if (AI.prov === 'claude') AI.prov = 'groq'; // pilihan Claude (berbayar) ditiadakan
   AI.key = AI.keys[AI.prov] || ''; AI.model = AI.models[AI.prov] || AI_BAWAAN[AI.prov];
   Object.assign(AI.pakai, JSON.parse(localStorage.getItem('plotkw.aipakai') || '{}'));
 } catch (e) { /* abaikan */ }
