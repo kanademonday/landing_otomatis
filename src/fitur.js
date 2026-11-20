@@ -213,30 +213,27 @@ function terapkanAdj(pts) {
   const c = CORE.centroid(pts), cs = Math.cos(a.dth), sn = Math.sin(a.dth);
   return pts.map(p => { const x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + cs * x - sn * y + a.dx, c[1] + sn * x + cs * y + a.dy]; });
 }
-function sejajarkanJalan() {
-  if (!S.T || !S.parcel || !S.osm) { toast('Pilih kandidat dulu.', 'warn'); return; }
-  const P = parcelWorld(S.T, false), segs = [];
-  const c0 = CORE.centroid(P);
-  for (const w of S.osm.ways) {
-    const pts = w.nodes.map(id => S.osm.nodes[id]).filter(Boolean).map(p => PROJ.fwd(p[0], p[1]));
-    for (let i = 1; i < pts.length; i++) { const m = [(pts[i][0] + pts[i - 1][0]) / 2, (pts[i][1] + pts[i - 1][1]) / 2]; if (Math.hypot(m[0] - c0[0], m[1] - c0[1]) < 250) segs.push([pts[i - 1], pts[i]]); }
-  }
-  if (!segs.length) { toast('Tidak ada jalan di dekat bidang.', 'warn'); return; }
-  let best = null;
-  P.forEach((a, i) => {
-    const b = P[(i + 1) % P.length], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], ea = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    for (const [p, q] of segs) {
-      const d = CORE.plNearest([p, q], m).d; if (d > 40) continue;
-      let diff = CORE.normAng(Math.atan2(q[1] - p[1], q[0] - p[0]) - ea);
-      if (diff > Math.PI / 2) diff -= Math.PI; if (diff < -Math.PI / 2) diff += Math.PI;
-      if (!best || d < best.d) best = { d, diff, i };
-    }
-  });
-  if (!best) { toast('Tidak ada sisi bidang yang berdekatan dengan jalan (≤ 40 m).', 'warn'); return; }
-  if (Math.abs(best.diff) > 25 * DEG) { toast(`Sisi terdekat berbeda ${fmt(Math.abs(best.diff) / DEG, 1)}° dari arah jalan; terlalu besar untuk disejajarkan otomatis.`, 'warn'); return; }
-  S.adj.dth += best.diff;
-  LOG.info(`Bidang disejajarkan dengan jalan: putar ${fmt(best.diff / DEG, 2)}° (sisi ${best.i + 1}, jarak ${fmt(best.d, 1)} m)`);
-  toast(`Bidang diputar ${fmt(best.diff / DEG, 1)}° agar sisi ${best.i + 1} sejajar jalan.`, 'ok');
-  tandaiDisesuaikan(); renderResult(); drawCands();
-}
 function tandaiDisesuaikan() { if (S.sel >= 0 && !S.cands[S.sel].label.includes('disesuaikan')) S.cands[S.sel].label += ' (disesuaikan)'; }
+
+/* ---------- salin ke AutoCAD (tempel di command line) ---------- */
+function perintahAcad() {
+  needResult();
+  const toXY = pts => pts.map(w => { const ll = PROJ.inv(w[0], w[1]); return CORE.crsFwd(SET.crs, ll[0], ll[1]); });
+  const polys = [toXY(parcelWorld(S.T, $('inForce').checked))];
+  for (const ex of S.extra) polys.push(toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))));
+  const L0 = ['_.UCS', '_W'];
+  for (const P of polys) { L0.push('_.PLINE'); for (const q of P) L0.push(`_non ${q[0].toFixed(3)},${q[1].toFixed(3)}`); L0.push('_C'); }
+  return L0.join('\n') + '\n';
+}
+function isiAcadTxt() { try { $('acadTxt').value = S.T && S.parcel && PROJ ? perintahAcad() : ''; } catch (e) { $('acadTxt').value = ''; } }
+const salinAcad = safe('Salin untuk AutoCAD', async () => {
+  const txt = perintahAcad(); $('acadTxt').value = txt;
+  let ok = false;
+  try { await navigator.clipboard.writeText(txt); ok = true; } catch (e) {
+    const ta = $('acadTxt'); ta.closest('details').open = true; ta.focus(); ta.select();
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+  }
+  const n = 1 + S.extra.length;
+  LOG.info(`Perintah AutoCAD disalin: ${n} polyline, ${CORE.CRS[SET.crs].nama}`);
+  toast(ok ? `Tersalin (${n} bidang, ${CORE.CRS[SET.crs].nama.split(' (')[0]}). Tempel di command line AutoCAD dengan Ctrl+V.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
+});

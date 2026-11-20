@@ -51,7 +51,6 @@ async def main():
     c=await pg.evaluate("(()=>{const ll=finalLL();return ll.reduce((a,p)=>[a[0]+p[0]/ll.length,a[1]+p[1]/ll.length],[0,0])})()")
     import math
     print('err m', math.hypot((c[0]-sk['truth'][0])*110540,(c[1]-sk['truth'][1])*111320))
-    await pg.click('[data-mv="n"]');await pg.click('[data-mv="rl"]')
     await pg.screenshot(path=D+'s4.png')
     for bid in ['#btnDXF','#btnSave']:
       if bid=='#btnSave': await pg.click('#btnMenu')

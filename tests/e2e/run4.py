@@ -56,22 +56,19 @@ async def main():
     c = await pg.evaluate("CORE.centroid(finalLL())")
     print('utara meleset 20°, mode kira: galat m', round(math.hypot((c[0]-sk['truth'][0])*110540, (c[1]-sk['truth'][1])*111320), 2))
     print('qc:', (await pg.inner_text('#qcInfo')).replace('\n', ' | ')[:260])
-    # geser bidang saja
-    c0 = await pg.evaluate("CORE.centroid(parcelWorld(S.T,false))"); r0 = await pg.evaluate("S.roads[0].pts[0]")
-    await pg.select_option('#inAdjMode', 'bidang'); await pg.click('[data-mv="e"]'); await pg.click('[data-mv="rl"]')
-    c1 = await pg.evaluate("CORE.centroid(parcelWorld(S.T,false))")
-    print('geser bidang saja: pindah', round(c1[0]-c0[0], 2), round(c1[1]-c0[1], 2), 'm | adj', await pg.evaluate("[S.adj.dx, +(S.adj.dth/CORE.DEG).toFixed(2)]"))
-    # dekatkan bidang ke jalan terdekat (sisi ±3 m dari jalan), miringkan 7°, lalu sejajarkan
-    info = await pg.evaluate('''(()=>{S.adj={dx:0,dy:0,dth:0};const P=parcelWorld(S.T,false),c0=CORE.centroid(P);let best=null;
-      for(const w of S.osm.ways){const pts=w.nodes.map(id=>S.osm.nodes[id]).filter(Boolean).map(p=>PROJ.fwd(p[0],p[1]));
-        for(let i=1;i<pts.length;i++){const n=CORE.plNearest([pts[i-1],pts[i]],c0);if(!best||n.d<best.d)best={...n,a:pts[i-1],b:pts[i]};}}
-      const ux=(c0[0]-best.pt[0])/best.d, uy=(c0[1]-best.pt[1])/best.d; const half=13;
-      S.adj.dx=best.pt[0]+ux*half-c0[0]; S.adj.dy=best.pt[1]+uy*half-c0[1]; S.adj.dth=7*CORE.DEG; S._jalan=[best.a,best.b]; return best.d;})()''')
-    await pg.click('#btnSejajar'); await pg.wait_for_timeout(100)
-    sisa = await pg.evaluate('''(()=>{const P=parcelWorld(S.T,false),[a,b]=S._jalan,ra=Math.atan2(b[1]-a[1],b[0]-a[0]);let m=99;
-      P.forEach((p,i)=>{const q=P[(i+1)%P.length];let d=CORE.normAng(Math.atan2(q[1]-p[1],q[0]-p[0])-ra);if(d>Math.PI/2)d-=Math.PI;if(d<-Math.PI/2)d+=Math.PI;m=Math.min(m,Math.abs(d));});return m/CORE.DEG;})()''')
-    print('sejajarkan: sisa selisih sudut sisi vs jalan (°)', round(sisa, 3))
-    print('sejajarkan -> adj dth', await pg.evaluate("+(S.adj.dth/CORE.DEG).toFixed(2)"), [t for t in (await pg.inner_text('#toast')).split('\n') if t][-1:])
+    # salin ke AutoCAD: isi clipboard harus sama dengan polyline BIDANG di DXF
+    await pg.context.grant_permissions(['clipboard-read', 'clipboard-write'])
+    await pg.click('#btnCopyAcad'); await pg.wait_for_timeout(200)
+    clip = await pg.evaluate("navigator.clipboard.readText()")
+    lines = clip.strip().split('\n')
+    print('salin AutoCAD: baris', len(lines), '| awal', lines[:4], '| akhir', lines[-1])
+    pl = [l for l in lines[lines.index('_.PLINE')+1:] ]; pl = pl[:pl.index('_C')]
+    xy_clip = [tuple(map(float, l.split()[1].split(','))) for l in pl]
+    async with pg.expect_download() as dl: await pg.click('#btnDXF')
+    d = await dl.value; fn = D + 'out_' + d.suggested_filename; await d.save_as(fn)
+    xy_dxf = await pg.evaluate("(t)=>CORE.dxfPolylines(t).filter(p=>p.layer==='BIDANG')[0].pts", open(fn).read())
+    print('selisih maks clipboard vs DXF (m):', round(max(math.hypot(a[0]-b2[0], a[1]-b2[1]) for a, b2 in zip(xy_clip, xy_dxf)), 4), '| titik', len(xy_clip), len(xy_dxf))
+    print('geser halus hilang:', await pg.evaluate("!document.querySelector('[data-mv]') && !document.getElementById('btnSejajar')"))
     await pg.screenshot(path=D + 'v22_langkah4.png')
     print('page errors:', errs, '| LOG.errors', await pg.evaluate("LOG.errors"))
     await b.close()

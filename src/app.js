@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -1000,25 +1000,8 @@ function renderResult() {
     ll.map((p, i) => `<tr><td>${i + 1}</td><td>${p[0].toFixed(7)}</td><td>${p[1].toFixed(7)}</td><td>${xy[i][0].toFixed(2)}</td><td>${xy[i][1].toFixed(2)}</td></tr>`).join('') +
     `</table><div class="hint">X/Y dalam ${esc(CORE.CRS[SET.crs].nama)}. TM-3: k=0,9999; FE 200.000; FN 1.500.000.</div>`;
   $('qcInfo').innerHTML = cekKewajaran(r);
-  cmpDraw(); updateKop(); aturOverlay();
+  cmpDraw(); updateKop(); aturOverlay(); isiAcadTxt();
 }
-function adjust(kind) {
-  if (!S.T) { toast('Pilih kandidat dulu.', 'warn'); return; }
-  const st = +$('inStep').value, rs = +$('inRotStep').value * DEG;
-  const c = CORE.centroid(parcelWorld(S.T, false));
-  const rot = d => { const cs = Math.cos(d), sn = Math.sin(d), x = S.T.tx - c[0], y = S.T.ty - c[1]; S.T.tx = c[0] + cs * x - sn * y; S.T.ty = c[1] + sn * x + cs * y; S.T.th = CORE.normAng(S.T.th + d); };
-  const scl = k => { S.T.s *= k; S.T.tx = c[0] + (S.T.tx - c[0]) * k; S.T.ty = c[1] + (S.T.ty - c[1]) * k; };
-  if ($('inAdjMode').value === 'bidang') {
-    const a = S.adj;
-    ({ n: () => a.dy += st, s: () => a.dy -= st, e: () => a.dx += st, w: () => a.dx -= st, rl: () => a.dth += rs, rr: () => a.dth -= rs, sp: () => scl(1.01), sm: () => scl(1 / 1.01) })[kind]();
-  } else {
-    ({ n: () => S.T.ty += st, s: () => S.T.ty -= st, e: () => S.T.tx += st, w: () => S.T.tx -= st, rl: () => rot(rs), rr: () => rot(-rs), sp: () => scl(1.01), sm: () => scl(1 / 1.01) })[kind]();
-    if (S.sel >= 0) S.cands[S.sel].T = { ...S.T };
-  }
-  tandaiDisesuaikan();
-  renderResult(); drawCands();
-}
-
 /* perbandingan */
 function cmpDraw() {
   const cv = $('cmp'); if (!cv || !$('cmpWrap').classList.contains('show')) return;
@@ -1087,7 +1070,6 @@ function init() {
   $('btnMatch').onclick = runMatch;
   $('btnCP').onclick = startCP;
   $('btnCPReset').onclick = () => { S.cps.forEach(c => c.ll = null); G.cp && G.cp.clearLayers(); S.mapMode = null; updateCpInfo(); skDraw(); LOG.info('Titik ikat di peta diulang'); };
-  document.querySelectorAll('[data-mv]').forEach(b => b.onclick = () => adjust(b.dataset.mv));
   $('inForce').onchange = renderResult; $('inOpa').oninput = cmpDraw;
   $('btnSave').onclick = saveProj; $('fileProj').onchange = e => { if (e.target.files[0]) loadProj(e.target.files[0]); e.target.value = ''; };
   $('btnLog').onclick = () => { $('log').classList.toggle('open'); renderLog(); };
@@ -1105,8 +1087,7 @@ function init() {
   $('btnDXF').onclick = ekspDXF;
   document.querySelectorAll('[data-rot]').forEach(b => b.onclick = () => putarGambar(+b.dataset.rot));
   $('btnNorthTool').onclick = () => { go(2); pilihAlat('north'); };
-  $('btnSejajar').onclick = sejajarkanJalan;
-  $('btnAdjReset').onclick = () => { S.adj = { dx: 0, dy: 0, dth: 0 }; renderResult(); drawCands(); LOG.info('Geser bidang saja direset'); };
+  $('btnCopyAcad').onclick = salinAcad;
   for (const id of ['inNama', 'inLuas']) $(id).addEventListener('input', updateKop);
   $('inOv').onchange = aturOverlay; $('inOvOpa').oninput = aturOverlay;
   document.addEventListener('keydown', e => {

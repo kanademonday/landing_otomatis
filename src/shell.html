@@ -135,6 +135,8 @@ td:first-child,th:first-child{text-align:left}
 .satuan input{padding-right:64px}
 .satuan span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--tinta2);font-weight:500;pointer-events:none}
 
+ol.langkah{margin:10px 0 4px;padding-left:20px;font-size:14px;color:var(--tinta2)}
+ol.langkah li{margin:3px 0}
 /* ---------- gambar di peta & pratinjau kandidat ---------- */
 .ovctl{position:absolute;top:12px;left:56px;z-index:900;background:var(--putih);border:1px solid var(--garis);border-radius:var(--r);padding:6px 12px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(24,48,46,.08)}
 .ovctl[hidden]{display:none}
@@ -321,28 +323,21 @@ td:first-child,th:first-child{text-align:left}
       <div id="qcInfo"></div>
     </section>
     <section class="blok">
-      <h3>Geser halus</h3>
-      <label for="inAdjMode">Yang digeser</label>
-      <select id="inAdjMode"><option value="semua">Semuanya (gambar, jalan, dan bidang)</option><option value="bidang">Bidang saja, bila bidang di gambar lebih miring dari aslinya</option></select>
-      <div class="dua">
-        <div><label for="inStep">Langkah geser</label><select id="inStep"><option value="0.5">0,5 m</option><option value="1" selected>1 m</option><option value="2">2 m</option><option value="5">5 m</option><option value="10">10 m</option></select></div>
-        <div><label for="inRotStep">Langkah putar</label><select id="inRotStep"><option value="0.5">0,5°</option><option value="1" selected>1°</option><option value="3">3°</option><option value="10">10°</option></select></div>
-      </div>
-      <div class="grid-btn">
-        <button class="btn" data-mv="w">Barat</button><button class="btn" data-mv="n">Utara</button><button class="btn" data-mv="s">Selatan</button><button class="btn" data-mv="e">Timur</button>
-        <button class="btn" data-mv="rl">Putar ↺</button><button class="btn" data-mv="rr">Putar ↻</button><button class="btn" data-mv="sm">Kecil 1%</button><button class="btn" data-mv="sp">Besar 1%</button>
-      </div>
-      <div class="row" style="margin-top:8px"><button class="btn" id="btnSejajar" title="Putar bidang agar sisi terdekat sejajar dengan jalan">Sejajarkan bidang dengan jalan</button><button class="btn nf" id="btnAdjReset">Kembalikan bidang</button></div>
-      <label class="cek" style="margin-top:12px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas yang diisi</label>
-    </section>
-    <section class="blok">
-      <h3>Ekspor</h3>
-      <label for="inNama">Nama bidang (dipakai di nama file dan label)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
-      <label for="inCrs">Sistem koordinat</label>
+      <h3>Ke AutoCAD</h3>
+      <label for="inCrs">Sistem koordinat gambar AutoCAD Anda</label>
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
-      <button class="btn pri" id="btnDXF" style="width:100%;height:40px;margin-top:10px">Unduh DXF untuk AutoCAD</button>
-      <p class="hint">Berisi poligon bidang, nomor titik sudut, label luas, bidang lain, jalan dari gambar, dan bingkai posisi gambar. Buka di AutoCAD, lalu <i>Save As</i> bila perlu format DWG.</p>
-    </section>
+      <label class="cek" style="margin-top:10px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas BT/SU</label>
+      <button class="btn pri" id="btnCopyAcad" style="width:100%;height:42px;margin-top:10px">Salin bidang untuk AutoCAD</button>
+      <ol class="langkah">
+        <li>Di AutoCAD Map 3D, klik kotak <i>command line</i> di bawah.</li>
+        <li>Tekan <b>Ctrl+V</b>. Polyline bidang langsung tergambar di koordinatnya.</li>
+        <li>Bila bidang tidak terlihat, ketik <b>Z</b> Enter lalu <b>E</b> Enter (zoom extents).</li>
+        <li>Bila yang muncul malah tulisan perintah, tekan Ctrl+Z di AutoCAD, klik dulu <i>command line</i>, lalu Ctrl+V lagi.</li>
+      </ol>
+      <details><summary>Lihat isi yang disalin</summary><textarea id="acadTxt" readonly rows="8" style="height:auto;font:13px/1.4 var(--fc)"></textarea></details>
+      <label for="inNama" style="margin-top:12px">Nama bidang (untuk nama file DXF)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
+      <button class="btn" id="btnDXF" style="width:100%;margin-top:8px">Unduh file DXF</button>
+      <p class="hint">Alternatif bila salin-tempel tidak bisa: buka atau INSERT file DXF di AutoCAD, lalu <i>Save As</i> DWG. Berisi bidang, nomor titik, label luas, bidang lain, jalan dari gambar, dan bingkai gambar.</p>
     <section class="blok">
       <h3>Koordinat titik sudut</h3>
       <div id="vtx"></div>
