@@ -13,7 +13,7 @@ const KS = JSON.parse(fs.readFileSync(__dirname + '/out/kasus.json'));
 const { cocokkan, conf, iou } = require('./cocok.js')(CORE, CFG, pola);
 (async () => {
   const WL = {}, rows = [];
-  const kasus = KS.kasus.filter(k => !katSet || katSet.has(k.kat));
+  const split = arg('split'); const kasus = KS.kasus.filter(k => (!katSet || katSet.has(k.kat)) && (!split || k.split === split));
   for (const K of kasus) {
     const Wl = WL[K.kel] || (WL[K.kel] = LD.siapkanWilayah(LD.daftarKel().find(x => x.kel === K.kel)));
     const truth = CORE.centroid(K.parcelW), t0 = process.hrtime.bigint();
