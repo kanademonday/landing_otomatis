@@ -1,0 +1,30 @@
+== BASELINE v2.11.0 (480 kasus)
+kategori split    n  top1  top3  top6 top1≤5m medErr p90Err IoU | keyakinan tinggi            | ambigu/verifikasi        | ms med/p95
+K1       tuning   42  92.9  95.2  97.6   90.5    0.1      5 0.99 | 100.0% benar, cakupan 85.7% | 14.3% (salah 3/6)        | 506/654
+K2       tuning   42  69.0  73.8  73.8   52.4    4.9   3652 0.55 | 100.0% benar, cakupan 16.7% | 64.3% (salah 13/27)      | 543/936
+K3       tuning   42  71.4  76.2  76.2   66.7    0.3   1367 0.96 | 100.0% benar, cakupan 52.4% | 45.2% (salah 12/19)      | 564/832
+K4       tuning   43  74.4  79.1  81.4   72.1    0.3   2542 0.96 | 100.0% benar, cakupan 58.1% | 41.9% (salah 11/18)      | 555/1306
+K5       tuning   45  95.6  95.6  95.6   88.9    0.0      6 1.00 | 100.0% benar, cakupan 82.2% | 15.6% (salah 2/7)        | 496/788
+K6       tuning   41  95.1 100.0 100.0   90.2    0.0      4 1.00 | 100.0% benar, cakupan 82.9% | 17.1% (salah 2/7)        | 1660/2942
+K7       tuning   42 100.0 100.0 100.0  100.0    0.1      1 0.99 | 100.0% benar, cakupan 90.5% | 7.1% (salah 0/3)         | 1340/2518
+K8       tuning   42  26.2  33.3  38.1   23.8  766.8   2112 0.00 | 100.0% benar, cakupan 9.5%  | 90.5% (salah 31/38)      | 424/807
+TOTAL    tuning  339  78.2  81.7  82.9   73.2    0.2   1254 0.97 | 100.0% benar, cakupan 59.9% | 36.9% (salah 74/125)     | 570/2096
+K1       heldout  18  94.4  94.4 100.0   94.4    0.0      0 1.00 | 100.0% benar, cakupan 94.4% | 5.6% (salah 1/1)         | 481/832
+K2       heldout  18  83.3  88.9  88.9   55.6    4.8   1606 0.71 | 100.0% benar, cakupan 22.2% | 50.0% (salah 3/9)        | 511/1638
+K3       heldout  18  83.3  88.9  88.9   83.3    0.0   3100 1.00 | 100.0% benar, cakupan 55.6% | 44.4% (salah 3/8)        | 463/1531
+K4       heldout  17  88.2  94.1  94.1   82.4    0.2     19 0.98 | 100.0% benar, cakupan 82.4% | 17.6% (salah 2/3)        | 475/626
+K5       heldout  15  93.3 100.0 100.0   93.3    0.0      3 1.00 | 100.0% benar, cakupan 86.7% | 13.3% (salah 1/2)        | 511/743
+K6       heldout  19 100.0 100.0 100.0   94.7    0.0      3 1.00 | 100.0% benar, cakupan 94.7% | 5.3% (salah 0/1)         | 1874/3430
+K7       heldout  18 100.0 100.0 100.0   94.4    0.0      2 1.00 | 100.0% benar, cakupan 88.9% | 5.6% (salah 0/1)         | 1246/2799
+K8       heldout  18  38.9  55.6  61.1   33.3  478.8   1246 0.00 | 100.0% benar, cakupan 5.6%  | 94.4% (salah 11/17)      | 373/1202
+TOTAL    heldout 141  85.1  90.1  91.5   78.7    0.1    532 0.99 | 100.0% benar, cakupan 66.0% | 29.8% (salah 21/42)      | 513/2162
+keandalan per skor #1 (tuning): rentang → n, top1 benar
+  [0.00, 0.70): n=4 benar 50.0%
+  [0.70, 0.80): n=26 benar 76.9%
+  [0.80, 0.90): n=41 benar 78.0%
+  [0.90, 0.95): n=42 benar 83.3%
+  [0.95, 1.00): n=226 benar 77.9%
+Rincian K4 per jumlah simpang (tuning+heldout):
+  0 simpang: n=20 top1 65.0 top3 70.0 top6 70.0 | ambigu 50.0% (salah 7/10) | keyakinan tinggi 100.0% benar, cakupan 50.0%
+  1 simpang: n=20 top1 85.0 top3 90.0 top6 90.0 | ambigu 40.0% (salah 3/8) | keyakinan tinggi 100.0% benar, cakupan 60.0%
+  2 simpang: n=20 top1 85.0 top3 90.0 top6 95.0 | ambigu 15.0% (salah 3/3) | keyakinan tinggi 100.0% benar, cakupan 85.0%

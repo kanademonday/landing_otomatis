@@ -1,0 +1,18 @@
+{
+  "seed": 20261123,
+  "benar_m": 15,
+  "benar_ketat_m": 5,
+  "kasus_per_kategori": 60,
+  "porsi_tuning": 0.7,
+  "radius_sketsa_m": [60, 120],
+  "skala_m_per_px": [0.0318, 0.127],
+  "catatan_skala": "1:250–1:1000 pada 200 dpi (pakaiHalaman render 200 dpi; cekSkala: N*0.0254/dpi)",
+  "utara_bawaan": "kira",
+  "variasi_skala": 0.2,
+  "tau": 12,
+  "wRev": 0.3,
+  "k2": { "sudut_deg": [5, 10], "geser_diag": 0.015, "skala_jalan": 0.1, "utara_deg": 15 },
+  "k3": { "hilang": [0.2, 0.5] },
+  "k5": { "porsi_siku4_min": 0.15, "radius_m": 300 },
+  "jalan_kecil": "^(service|living_street|footway|path|steps|track|pedestrian|cycleway|unclassified)$"
+}
