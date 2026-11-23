@@ -502,7 +502,7 @@ async function panggilClaude(gambar, prompt, skema, maxTok = 1500) {
   throw new Error('Claude masih sibuk. Coba lagi beberapa menit lagi.');
 }
 async function panggilGroq(gambarB64, prompt, skema) {
-  if (!AI.key) throw new Error('Isi kunci API Groq dulu (gratis, lihat panduan di bagian Baca otomatis).');
+  if (!AI.key) { bukaSetAI(); throw new Error('Kunci API Groq belum diisi di browser ini. Tempel kunci (gsk_…) di kotak yang sudah dibuka, lalu ulangi.'); }
   const isiPrompt = prompt + '\n\nBalas HANYA dengan satu objek JSON yang mengikuti skema ini:\n' + JSON.stringify(skema);
   for (let coba = 0; coba < 4; coba++) {
     const t0 = performance.now(); let res;
@@ -752,6 +752,8 @@ const digitasiOtomatis = safe('Digitasi otomatis', async id => {
   const d = DOCS.list.find(x => x.id === id); if (!d) return;
   const t0 = performance.now(), langkah = t => { const e = document.querySelector(`[data-hasil="${id}"]`); if (e) e.innerHTML = `<p class="hint"><b>Digitasi otomatis:</b> ${t}</p>`; LOG.info('Digitasi otomatis: ' + t); };
   LOG.info(`=== Digitasi otomatis ${d.info.label} ===`);
+  simpanSetAI();
+  if (AI.prov === 'groq' && !AI.key && !AI.hasil[id]) { bukaSetAI(); LOG.warn('Digitasi otomatis dibatalkan: kunci API Groq belum diisi di browser ini'); toast('Kunci API Groq belum diisi di browser ini. Tempel kunci (gsk_…) di kotak yang sudah dibuka, lalu klik Digitasi otomatis lagi.', 'warn'); return; }
   // 1. baca isian
   if (!AI.hasil[id]) { langkah('membaca dokumen…'); await bacaBerkas(id); }
   if (!AI.hasil[id]) throw new Error('Pembacaan dokumen gagal (lihat log). Periksa kunci API / koneksi AI.');
@@ -1189,4 +1191,9 @@ function initPola() {
     LOG.info(`SU ${no} di ${kel} ditandai sudah ketemu`); toast(`SU ${no} dicatat sudah ketemu. SU bernomor berdekatan akan dicari di sekitarnya.`, 'ok');
   });
   renderPola();
+}
+
+// buka pengaturan AI dan arahkan ke kotak kunci
+function bukaSetAI() {
+  try { go(2); const d = $('aiSet'); d.open = true; setTimeout(() => { $('inAiKey').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('inAiKey').focus(); }, 150); } catch (e) { /* abaikan */ }
 }

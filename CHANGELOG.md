@@ -2,6 +2,9 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.12.1 — 2026-11-23
+- Bila kunci API Groq belum diisi di browser yang dipakai, *Digitasi otomatis* tidak lagi berakhir dengan error: pengaturan AI langsung dibuka dan kotak kunci disorot, dengan petunjuk untuk menempel kunci lalu mengulang.
+
 ## v2.12.0 — 2026-11-23 — Mode pola jalan (eksperimen, bawaan mati)
 - Kotak centang baru **"Mode pola jalan (eksperimen)"** di Pengaturan lanjutan langkah 3. Bila tidak dicentang, aplikasi bekerja persis seperti v2.11.0 (core.js tidak diubah; diuji identik).
 - **Perkiraan lokasi:** pencarian dipersempit ke lingkaran di sekitar *titik perkiraan* (tengah peta, mis. dari peta analog) atau ke sekitar **SU bernomor berdekatan yang sudah ketemu** (3 nomor terdekat, radius ≥150 m). Kandidat yang pusat bidangnya di luar lingkaran dibuang.
