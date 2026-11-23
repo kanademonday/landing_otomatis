@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.11.0';
+const APP_VERSION = '2.12.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -826,6 +826,7 @@ function renderReady() {
   let warn = '';
   if (S.roads.length && !SK.junc.length) warn = '<li class="qc-warn">Sketsa tanpa simpang: hasil bisa sangat ambigu. Isi nama jalan, arah utara, atau gunakan titik ikat.';
   else if (SK.junc.length === 1 && $('inNorthMode').value === 'bebas') warn = '<li class="qc-warn">Hanya 1 simpang & arah utara tidak diketahui: banyak simpang serupa mungkin cocok. Isi arah utara / nama jalan bila ada.';
+  const ip = infoPola(); if (ip) items.push(ip);
   $('readyInfo').innerHTML = '<ul class="qc">' + items.join('') + (warn ? warn + '</li>' : '') + '</ul>';
 }
 function buildCtx(s0, tanpaNama) {
@@ -834,7 +835,7 @@ function buildCtx(s0, tanpaNama) {
   const t0 = performance.now();
   const ctx = CORE.prepareCtx({
     ways: S.osm.ways, nodeXY, roadsImg: tanpaNama ? S.roads.map(r => ({ ...r, name: '' })) : S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
-    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
+    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: polaInArea() || inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
     log: (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m)
   });
   LOG.info(`Konteks pencocokan siap (${Math.round(performance.now() - t0)} ms)`);
@@ -893,6 +894,7 @@ const runMatch = safe('Pencocokan', async () => {
       LOG.info('Nama jalan dipakai sebagai petunjuk', list.map(c => ({ skorBentuk: +c.r.score.toFixed(3), namaCocok: c.nama, sumber: c.sumber })));
     }
     S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
+    if (POLA.on) S.cands = saringPola(S.cands, CTX);
   } finally { $('btnMatch').disabled = false; }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);
@@ -902,6 +904,7 @@ const runMatch = safe('Pencocokan', async () => {
 });
 function conf(i) {
   const c = S.cands[i]; if (!c.r) return ['manual', 'b-mid'];
+  if (POLA.on) return confPola(i);
   const sc = c.r.score, gap = S.cands[i + 1] && S.cands[i + 1].r ? sc - S.cands[i + 1].r.score : 1;
   if (i === 0 && sc >= 0.8 && gap > 0.06) return ['keyakinan tinggi', 'b-ok'];
   if (sc >= 0.65) return [i === 0 && gap <= 0.06 ? 'ambigu' : 'sedang', 'b-mid'];
@@ -1068,7 +1071,7 @@ function needResult() { if (!S.T || !S.parcel || !PROJ) throw new Error('Belum a
 const saveProj = safe('Simpan proyek', async () => {
   const o = {
     app: 'pencocok-situasi-bidang', version: APP_VERSION, saved: new Date().toISOString(),
-    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, skala: $('inSkala').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked },
+    input: { kota: $('inKota').value, kec: $('inKec').value, kel: $('inKel').value, luas: $('inLuas').value, skala: $('inSkala').value, northMode: $('inNorthMode').value, nama: $('inNama').value, foot: $('inFoot').checked, tau: $('inTau').value, scaleVar: $('inScaleVar').value, wrev: $('inWrev').value, force: $('inForce').checked, pola: simpanPola() },
     wil: S.wil, osm: S.osm, img: S.img, roads: S.roads, parcel: S.parcel, extra: S.extra, adj: S.adj, cps: S.cps, cands: S.cands.map(c => ({ T: c.T, r: c.r, label: c.label, rms: c.rms, nama: c.nama })), sel: S.sel, T: S.T
   };
   download(new Blob([JSON.stringify(o)], { type: 'application/json' }), baseName() + '_proyek.json');
@@ -1080,6 +1083,7 @@ const loadProj = safe('Muat proyek', async file => {
   if (I.kec != null) { $('inKec').value = I.kec; isiKelurahan(); if (I.kel != null) $('inKel').value = I.kel; }
   for (const [k, id] of [['luas', 'inLuas'], ['skala', 'inSkala'], ['northMode', 'inNorthMode'], ['nama', 'inNama'], ['tau', 'inTau'], ['scaleVar', 'inScaleVar'], ['wrev', 'inWrev']]) if (I[k] != null) $(id).value = I[k];
   $('inFoot').checked = I.foot !== false; $('inForce').checked = I.force !== false;
+  if (I.pola) muatPola(I.pola);
   S.wil = o.wil; S.osm = o.osm; S.roads = o.roads || []; S.parcel = o.parcel; S.extra = o.extra || []; S.adj = o.adj || { dx: 0, dy: 0, dth: 0 }; S.cps = o.cps || []; S.cands = o.cands || []; S.sel = o.sel ?? -1; S.T = o.T; CTX = null;
   if (S.wil) { drawWilayah(); setProj(); $('btnJalan').disabled = false; }
   if (S.osm) { drawOSM(); $('jalanInfo').textContent = `${S.osm.ways.length} ruas jalan (dari proyek).`; }
@@ -1106,6 +1110,7 @@ function init() {
   $('btnNew').onclick = () => bidangBaru(false);
   $('inFoot').onchange = () => { if (S.wil && SMD.jalan) { S.cands = []; S.sel = -1; S.T = null; terapkanJalanOffline(); } };
   initDataSamarinda();
+  initPola();
   $('btnManualArea').onclick = safe('Area manual', async () => {
     if (!map) throw new Error('Peta tidak tersedia.');
     const c = map.getCenter(), r = +$('inRad').value || 1500;

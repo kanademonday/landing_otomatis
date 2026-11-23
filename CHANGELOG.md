@@ -2,6 +2,14 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.12.0 — 2026-11-23 — Mode pola jalan (eksperimen, bawaan mati)
+- Kotak centang baru **"Mode pola jalan (eksperimen)"** di Pengaturan lanjutan langkah 3. Bila tidak dicentang, aplikasi bekerja persis seperti v2.11.0 (core.js tidak diubah; diuji identik).
+- **Perkiraan lokasi:** pencarian dipersempit ke lingkaran di sekitar *titik perkiraan* (tengah peta, mis. dari peta analog) atau ke sekitar **SU bernomor berdekatan yang sudah ketemu** (3 nomor terdekat, radius ≥150 m). Kandidat yang pusat bidangnya di luar lingkaran dibuang.
+- **Daftar SU yang sudah ketemu:** tempel daftar dari AutoCAD (`X = … Y = … su.02743` atau `nomor,X,Y`), tombol *Tandai SU ini sudah ketemu* di langkah 4, unduh CSV. Disimpan di browser per kelurahan. Nomor SU terisi otomatis dari nama file.
+- **Label jujur:** gambar tanpa simpang dengan ≤2 jalan tidak pernah berlabel "keyakinan tinggi" ("perlu verifikasi: gambar minim"); beberapa lokasi berskor serupa → "ambigu: N lokasi serupa".
+- Kode 16010403 dikenali sebagai Kel. Sidomulyo.
+- Benchmark offline baru di `tests/benchmark/` (lihat README di sana). Hasil pada 15 SU nyata Sidomulyo: tanpa mode pola 0/15 kandidat benar (≤25 m) di 6 besar, kandidat 500–1.300 m dari lokasi; dengan mode pola + SU tetangga 4/15 di 6 besar, kandidat 20–290 m; label "keyakinan tinggi" yang salah: 0.
+
 ## v2.11.0 — 2026-11-20 — Jalan sketsa lebih utuh, posisi tak mungkin ditolak
 - Tulisan nama jalan tidak lagi dianggap garis tepi jalan (garis tepi harus menerus panjang; huruf hanya potongan pendek). Bila AI memberi posisi tulisan nama, dipilih pasangan tepi bersebelahan yang mengapit tulisan itu.
 - Garis jalan AI yang hampir lurus disederhanakan (belokan kecil = derau), lalu **ujungnya diperpanjang** selama kedua tepi jalan masih tergambar; di simpang, satu tepi boleh terbuka sebentar.

@@ -264,7 +264,7 @@ async function muatPdfjs() {
 }
 // Kode wilayah pada nama file: 16 01 KK LL (prov, kota, kecamatan, kelurahan)
 const KODE_KEC = { '01': 'Palaran', '02': 'Samarinda Seberang', '03': 'Samarinda Ulu', '04': 'Samarinda Ilir', '05': 'Samarinda Utara', '06': 'Sungai Kunjang', '07': 'Sambutan', '08': 'Sungai Pinang', '09': 'Samarinda Kota', '10': 'Loa Janan Ilir' };
-const KODE_KEL = { '16010401': ['Samarinda Ilir', 'Selili'] };   // diketahui pasti
+const KODE_KEL = { '16010401': ['Samarinda Ilir', 'Selili'], '16010403': ['Samarinda Ilir', 'Sidomulyo'] };   // diketahui pasti
 try { Object.assign(KODE_KEL, JSON.parse(localStorage.getItem('plotkw.kode') || '{}')); } catch (e) { /* abaikan */ }
 function bacaNamaFile(n) {
   const nm = n.replace(/\.[^.]+$/, '');
@@ -363,6 +363,7 @@ const pakaiHalaman = safe('Pakai halaman', async () => {
     const r = await renderHalaman(d.pdf, VW.pg, null, 200);
     $('viewer').hidden = true;
     setImage(r.url, `${d.info.label} hal ${VW.pg}`, false, false, { dpi: r.dpi });
+    if (d.info.jenis === 'SU' && d.info.nomor) setNomorSU(d.info.nomor);
     if (d.info.jenis === 'SU' && !$('inSkala').value) $('inSkala').value = 500;
     LOG.info(`Halaman ${VW.pg} dari ${d.info.jenis} dipakai sebagai gambar situasi`, { dpi: +r.dpi.toFixed(1), w: r.w, h: r.h });
     toast('Gambar siap. Periksa skala (biasanya 1:500), putar agar utara di atas, lalu telusuri jalan dan bidang.', 'ok');
@@ -1066,4 +1067,126 @@ function sederhanakan(P, tol) {
   let im = -1, dm = 0;
   for (let i = 1; i < P.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - P[i][1]) - (a[0] - P[i][0]) * (b[1] - a[1])) / L; if (d > dm) { dm = d; im = i; } }
   return dm <= tol ? [a, b] : [...sederhanakan(P.slice(0, im + 1), tol).slice(0, -1), ...sederhanakan(P.slice(im), tol)];
+}
+
+/* ---------- MODE POLA JALAN (eksperimen; bawaan MATI) ----------
+   Gambar SU lama sering hanya berisi satu garis jalan lurus → cocok di banyak tempat. Mode ini:
+   1) mempersempit pencarian ke titik perkiraan (dari peta analog) atau ke sekitar SU bernomor berdekatan yang sudah ketemu;
+   2) memberi label jujur: gambar minim tidak pernah "keyakinan tinggi"; beberapa lokasi serupa = "ambigu".
+   Saat mati: tidak ada yang berubah (polaInArea() = null, conf() lama). */
+const POLA = { on: false, rBawaan: 150, kTetangga: 3, maksSelisihNomor: 300, epsSerupa: 0.03, titik: null };
+const SUKET = (() => { try { return JSON.parse(localStorage.getItem('plotkw.suket') || '{}'); } catch (e) { return {}; } })();
+const kunciSU = (kel, no) => kel + '#' + (+no);
+function simpanSuket() { try { localStorage.setItem('plotkw.suket', JSON.stringify(SUKET)); } catch (e) { /* abaikan */ } }
+function setNomorSU(no) { if ($('inNoSU')) { $('inNoSU').value = +no; renderPola(); } }
+function areaPola() {
+  if (!POLA.on) return null;
+  if (POLA.titik) return { lat: POLA.titik.lat, lon: POLA.titik.lon, r: POLA.titik.r, sumber: 'titik perkiraan dari peta' };
+  const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value;
+  if (!no || !kel) return null;
+  const tet = Object.values(SUKET).filter(x => x.kel === kel && x.nomor !== no && Math.abs(x.nomor - no) <= POLA.maksSelisihNomor)
+    .sort((a, b) => Math.abs(a.nomor - no) - Math.abs(b.nomor - no)).slice(0, POLA.kTetangga);
+  if (!tet.length) return null;
+  const lat = tet.reduce((a, x) => a + x.lat, 0) / tet.length, lon = tet.reduce((a, x) => a + x.lon, 0) / tet.length;
+  const m = 111320, sebar = Math.max(0, ...tet.map(x => Math.hypot((x.lat - lat) * m, (x.lon - lon) * m * Math.cos(lat * DEG))));
+  return { lat, lon, r: Math.max(POLA.rBawaan, 1.5 * sebar), sumber: `${tet.length} SU tetangga yang sudah ketemu (no. ${tet.map(x => x.nomor).join(', ')})` };
+}
+// Simpang/ruas jangkar boleh sampai 100 m di luar lingkaran (simpang sketsa bisa jauh dari bidang);
+// kandidat akhir disaring: pusat bidang harus di dalam lingkaran (saringPola).
+const POLA_JANGKAR_EKSTRA = 100;
+function polaInArea() {
+  const a = areaPola(); if (!a || !PROJ) return null;
+  const c = PROJ.fwd(a.lat, a.lon);
+  return (x, y) => Math.hypot(x - c[0], y - c[1]) < a.r + POLA_JANGKAR_EKSTRA;
+}
+function saringPola(cands, ctx) {
+  const a = areaPola(); if (!a || !PROJ || !ctx) return cands;
+  const c = PROJ.fwd(a.lat, a.lon), pc = ctx.parcelC;
+  const out = cands.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return Math.hypot(p[0] - c[0], p[1] - c[1]) <= a.r; });
+  if (out.length < cands.length) LOG.info(`Mode pola: ${cands.length - out.length} kandidat di luar area perkiraan dibuang`);
+  if (!out.length) { LOG.warn('Mode pola: tidak ada kandidat di dalam area perkiraan; ditampilkan kandidat terdekat apa adanya'); toast('Tidak ada kandidat di dalam area perkiraan. Periksa titik/radius, atau gambar jalannya.', 'warn'); return cands; }
+  return out.map((k, i) => ({ ...k, label: '#' + (i + 1) }));
+}
+function infoPola() {
+  if (!POLA.on) return '';
+  const a = areaPola();
+  return a ? `<li class="qc-ok">Mode pola: pencarian dipersempit ke radius ${Math.round(a.r)} m (${esc(a.sumber)})</li>`
+    : '<li class="qc-info">Mode pola aktif, tetapi belum ada titik perkiraan atau SU tetangga yang sudah ketemu: dicari di seluruh kelurahan.</li>';
+}
+function confPola(i) {
+  const c = S.cands, sc = c[i].r.score, gap = c[i + 1] && c[i + 1].r ? sc - c[i + 1].r.score : 1;
+  if (i === 0) {
+    if (!SK.junc.length && S.roads.length <= 2) return ['perlu verifikasi: gambar minim (tanpa simpang)', 'b-mid'];
+    if (sc >= 0.8 && gap > 0.06) return ['keyakinan tinggi', 'b-ok'];
+    const serupa = c.filter(x => x.r && x.r.score >= sc - POLA.epsSerupa).length;
+    if (sc >= 0.65) return [serupa >= 2 ? `ambigu: ${serupa} lokasi serupa` : 'sedang', 'b-mid'];
+    return ['rendah', 'b-low'];
+  }
+  return sc >= 0.65 ? ['sedang', 'b-mid'] : ['rendah', 'b-low'];
+}
+function gambarAreaPola() {
+  if (!map) return;
+  if (!G.pola) G.pola = L.layerGroup().addTo(map);
+  G.pola.clearLayers();
+  const a = areaPola();
+  if (a) L.circle([a.lat, a.lon], { radius: a.r, color: '#1F5E5B', weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(G.pola);
+}
+function renderPola() {
+  if (!$('polaBox')) return;
+  $('polaBox').hidden = !POLA.on; if ($('btnTandaKetemu')) $('btnTandaKetemu').hidden = !POLA.on;
+  const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPola();
+  $('suketInfo').textContent = kel ? `${n} SU di ${kel} sudah tercatat ketemu (tersimpan di browser ini).` : 'Pilih kelurahan dulu di langkah 1.';
+  $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: radius <b>${Math.round(a.r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
+  try { renderReady(); } catch (e) { /* abaikan */ }
+  try { gambarAreaPola(); } catch (e) { LOG.warn('Lingkaran area tidak bisa digambar di peta', e.message); }
+}
+// impor daftar SU yang sudah ketemu: baris "X = 51583.170 Y = 1444797.927 su.02743" atau "02743,51583.170,1444797.927"
+function imporSuket(teks) {
+  const kel = $('inKel').value; if (!kel || kel === '*') throw new Error('Pilih kelurahan dulu (langkah 1); daftar disimpan per kelurahan.');
+  let n = 0; const gagal = [];
+  for (const baris of teks.split(/\r?\n/)) {
+    const b = baris.trim(); if (!b) continue;
+    let m = b.match(/X\s*=\s*([\d.]+)\s*[,;]?\s*Y\s*=\s*([\d.]+)\s*[,;]?\s*(?:su|gs)?[\s.:_-]*0*(\d+)/i), no, X, Y;
+    if (m) { X = +m[1]; Y = +m[2]; no = +m[3]; }
+    else if ((m = b.match(/^(?:su|gs)?[\s.:_-]*0*(\d+)\s*[,;\t ]\s*([\d.]+)\s*[,;\t ]\s*([\d.]+)$/i))) { no = +m[1]; X = +m[2]; Y = +m[3]; }
+    else { gagal.push(b); continue; }
+    const ll = CORE.crsInv(SET.crs, X, Y);
+    SUKET[kunciSU(kel, no)] = { kel, nomor: no, lat: ll[0], lon: ll[1], sumber: 'impor', t: Date.now() }; n++;
+  }
+  simpanSuket(); renderPola();
+  LOG.info(`Impor SU yang sudah ketemu: ${n} baris (${SET.crs})`, gagal.length ? { tidakTerbaca: gagal.slice(0, 5) } : undefined);
+  toast(`${n} SU tercatat di ${kel}` + (gagal.length ? `; ${gagal.length} baris tidak terbaca (lihat log).` : '.'), n ? 'ok' : 'warn');
+}
+function eksporSuket() {
+  const kel = $('inKel').value, L1 = Object.values(SUKET).filter(x => x.kel === kel).sort((a, b) => a.nomor - b.nomor);
+  if (!L1.length) throw new Error('Belum ada SU yang tercatat di kelurahan ini.');
+  const t = 'nomor_su,X,Y,kelurahan,crs\n' + L1.map(x => { const q = CORE.crsFwd(SET.crs, x.lat, x.lon); return `${x.nomor},${q[0].toFixed(3)},${q[1].toFixed(3)},${x.kel},${SET.crs}`; }).join('\n') + '\n';
+  download(new Blob([t], { type: 'text/csv' }), `SU_sudah_ketemu_${kel.replace(/\W+/g, '_')}.csv`);
+}
+function simpanPola() { return { on: POLA.on, titik: POLA.titik, nomor: $('inNoSU') ? $('inNoSU').value : '' }; }
+function muatPola(o) { POLA.on = !!o.on; POLA.titik = o.titik || null; if ($('inPola')) $('inPola').checked = POLA.on; if ($('inNoSU')) $('inNoSU').value = o.nomor || ''; renderPola(); }
+function initPola() {
+  if (!$('inPola')) return;
+  try { POLA.on = localStorage.getItem('plotkw.pola') === '1'; } catch (e) { /* abaikan */ }
+  $('inPola').checked = POLA.on;
+  $('inPola').onchange = () => { POLA.on = $('inPola').checked; try { localStorage.setItem('plotkw.pola', POLA.on ? '1' : '0'); } catch (e) { /* abaikan */ } LOG.info('Mode pola jalan ' + (POLA.on ? 'aktif' : 'mati')); if (S.cands.length) renderCands(); renderPola(); };
+  $('inNoSU').oninput = renderPola;
+  $('btnTitikPeta').onclick = safe('Titik perkiraan', async () => {
+    if (!map) throw new Error('Peta tidak tersedia.');
+    const c = map.getCenter(); POLA.titik = { lat: c.lat, lon: c.lng, r: Math.max(30, +$('inPolaR').value || POLA.rBawaan) };
+    LOG.info('Titik perkiraan dipasang', { r: POLA.titik.r }); renderPola(); toast('Titik perkiraan dipasang di tengah peta.', 'ok');
+  });
+  $('btnTitikHapus').onclick = () => { POLA.titik = null; renderPola(); };
+  $('inPolaR').onchange = () => { if (POLA.titik) { POLA.titik.r = Math.max(30, +$('inPolaR').value || POLA.rBawaan); renderPola(); } };
+  $('btnSuketImpor').onclick = safe('Impor SU sudah ketemu', async () => imporSuket($('inSuketTeks').value));
+  $('btnSuketEkspor').onclick = safe('Ekspor SU sudah ketemu', async () => eksporSuket());
+  $('btnTandaKetemu').onclick = safe('Tandai SU ketemu', async () => {
+    needResult();
+    const no = +$('inNoSU').value, kel = $('inKel').value;
+    if (!no) { go(3); throw new Error('Isi nomor SU di langkah 3 (Mode pola jalan) dulu.'); }
+    const c = CORE.centroid(finalLL());
+    SUKET[kunciSU(kel, no)] = { kel, nomor: no, lat: c[0], lon: c[1], sumber: 'aplikasi', t: Date.now() }; simpanSuket(); renderPola();
+    LOG.info(`SU ${no} di ${kel} ditandai sudah ketemu`); toast(`SU ${no} dicatat sudah ketemu. SU bernomor berdekatan akan dicari di sekitarnya.`, 'ok');
+  });
+  renderPola();
 }

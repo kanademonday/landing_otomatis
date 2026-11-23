@@ -340,6 +340,20 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
     <button class="btn pri" id="btnMatch" style="width:100%;height:40px;margin-top:6px">Mulai pencocokan</button>
     <div class="progress"><div id="prog"></div></div>
     <p class="hint" id="progTx"></p>
+    <section class="blok" id="polaBox" hidden>
+      <h3>Perkiraan lokasi (mode pola jalan)</h3>
+      <p class="hint">Gambar dengan satu garis jalan cocok di banyak tempat. Persempit pencarian dengan titik perkiraan dari peta analog, atau dengan SU bernomor berdekatan yang sudah ketemu.</p>
+      <label for="inNoSU">Nomor SU yang sedang dicari</label><input type="number" id="inNoSU" placeholder="mis. 3770 (terisi otomatis dari nama file)">
+      <p class="hint" id="polaArea"></p>
+      <div class="row"><button class="btn" id="btnTitikPeta">Pakai tengah peta sebagai titik perkiraan</button><button class="btn nf" id="btnTitikHapus">Hapus titik</button></div>
+      <label for="inPolaR">Radius titik perkiraan (m)</label><input type="number" id="inPolaR" value="150">
+      <details><summary>SU yang sudah ketemu</summary>
+        <p class="hint" id="suketInfo"></p>
+        <label for="inSuketTeks">Tempel daftar dari AutoCAD, satu SU per baris (koordinat mengikuti pilihan sistem koordinat di langkah 4)</label>
+        <textarea id="inSuketTeks" rows="4" placeholder="X = 51583.170     Y = 1444797.927 su.02743"></textarea>
+        <div class="row"><button class="btn" id="btnSuketImpor">Simpan daftar</button><button class="btn nf" id="btnSuketEkspor">Unduh CSV</button></div>
+      </details>
+    </section>
     <section class="blok">
       <h3>Kandidat lokasi</h3>
       <div class="list" id="candList"><p class="hint">Belum ada.</p></div>
@@ -354,6 +368,8 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
       <label for="inTau">Toleransi jarak jalan (m), besarkan bila gambar kasar</label><input type="number" id="inTau" value="12">
       <label for="inScaleVar">Variasi skala yang diizinkan (±%)</label><input type="number" id="inScaleVar" value="20">
       <label for="inWrev">Bobot jalan nyata yang tidak tergambar (0–0,6)</label><input type="number" id="inWrev" value="0.3" step="0.05">
+      <label class="cek" style="margin-top:10px"><input type="checkbox" id="inPola"> Mode pola jalan (eksperimen)</label>
+      <p class="hint">Untuk gambar tanpa nama jalan / tanpa simpang: persempit area pencarian dan beri label keyakinan yang lebih hati-hati.</p>
     </details>
   </div>
 
@@ -382,6 +398,7 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
       <details><summary>Lihat isi yang disalin</summary><textarea id="acadTxt" readonly rows="8" style="height:auto;font:13px/1.4 var(--fc)"></textarea></details>
       <label for="inNama" style="margin-top:12px">Nama bidang (untuk nama file DXF)</label><input type="text" id="inNama" placeholder="mis. Bidang Jl. Pemuda 12">
       <button class="btn" id="btnDXF" style="width:100%;margin-top:8px">Unduh file DXF</button>
+      <button class="btn" id="btnTandaKetemu" style="width:100%;margin-top:8px" hidden>Tandai SU ini sudah ketemu</button>
       <p class="hint">Alternatif bila salin-tempel tidak bisa: buka atau INSERT file DXF di AutoCAD, lalu <i>Save As</i> DWG. Berisi bidang, nomor titik, label luas, bidang lain, jalan dari gambar, dan bingkai gambar.</p>
     <section class="blok">
       <h3>Koordinat titik sudut</h3>
