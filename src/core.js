@@ -186,6 +186,12 @@ const CORE = (() => {
   function overlapFrac(samplesW, ref) {
     if (!ref || !ref.length || !samplesW.length) return 0;
     let n = 0;
+    if (ref.grid) { // indeks kisi (hasil identik, lebih cepat untuk ribuan bidang acuan)
+      const G = ref.grid;
+      for (const s of samplesW) { const ids = G.map.get(Math.floor(s[0] / G.cell) + ',' + Math.floor(s[1] / G.cell)); if (!ids) continue;
+        for (const k of ids) { const r = ref[k]; if (s[0] < r.bb[0] || s[0] > r.bb[2] || s[1] < r.bb[1] || s[1] > r.bb[3]) continue; if (pointInRing(s[0], s[1], r.pts)) { n++; break; } } }
+      return n / samplesW.length;
+    }
     for (const s of samplesW) for (const r of ref) {
       if (s[0] < r.bb[0] || s[0] > r.bb[2] || s[1] < r.bb[1] || s[1] > r.bb[3]) continue;
       if (pointInRing(s[0], s[1], r.pts)) { n++; break; }
@@ -652,6 +658,7 @@ const CORE = (() => {
     let longest = roadsM[0]; for (const p of roadsM) if (plLen(p) > plLen(longest)) longest = p;
     log('info', `Titik sampel sketsa ${sk.x.length}, simpang sketsa ${skJ.length}, simpang OSM di wilayah ${osJ.length}, titik OSM ${OS.xs.length}`);
     const ref = (I.refXY || []).map(pts => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); } return { pts, bb: [a, b, c, d] }; });
+    if (ref.length > 100) { const cell = 25, map = new Map(); ref.forEach((r, k) => { for (let i = Math.floor(r.bb[0] / cell); i <= Math.floor(r.bb[2] / cell); i++) for (let j = Math.floor(r.bb[1] / cell); j <= Math.floor(r.bb[3] / cell); j++) { const q = i + ',' + j; (map.get(q) || map.set(q, []).get(q)).push(k); } }); ref.grid = { cell, map }; }
     if (ref.length) log('info', `Bidang referensi untuk cek tumpang tindih: ${ref.length}`);
     return { fields, sk, sub, skF, cov, osm, osmSamples, skJ, osJ, longest, tau: I.tau, wRev: I.wRev ?? 0.3, inArea: I.inArea, parcelC: centroid(parcelM), roadsM, parcelM, bb,
       ref, parcelSamples: ref.length ? interiorSamples(parcelM, 40) : null,

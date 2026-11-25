@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.16.0';
+const APP_VERSION = '2.17.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -899,7 +899,8 @@ const runMatch = safe('Pencocokan', async () => {
       LOG.info('Nama jalan dipakai sebagai petunjuk', list.map(c => ({ skorBentuk: +c.r.score.toFixed(3), namaCocok: c.nama, sumber: c.sumber })));
     }
     S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
-    if (POLA.on) S.cands = urutPersil(saringPola(S.cands, CTX), CTX);
+    if (POLA.on) S.cands = saringPola(S.cands, CTX);
+    if (persilAktif()) S.cands = urutPersil(await tambahKandidatPersil(S.cands, s0, opt, logf), CTX);
   } finally { $('btnMatch').disabled = false; renderPersilTombol(); }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);

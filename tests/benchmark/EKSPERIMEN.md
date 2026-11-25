@@ -67,3 +67,9 @@ Aturan terkunci: k=3, r=60 m, skor+0,2×tempel, "keyakinan tinggi" bila tempel#1
 
 Uji akhir Sidomulyo (n=60, tidak dipakai menyetel): v0 top1 28% / top6 38%, "tinggi" 5/5 → **final top1 58% / top6 58%, "tinggi" 19/20 (cakupan 33%)**.
 15 SU nyata (≤25 m): baseline 0/15 → final top1 2/15, top6 3/15; "keyakinan tinggi" 1 kasus, benar.
+
+## Bantuan persil lunak (v2.17.0)
+Varian `persil.js --varian v5 --final 1`: seluruh kelurahan dengan acuan persil (tak boleh menimpa) + kandidat tambahan dari lingkaran 60 m di 3 SU bernomor dekat (tidak membuang kandidat), urut skor + 0,2×tempel.
+Tuning (160, kasus dengan maupun tanpa SU tetangga): v0 31/39/45% · v3 (acuan saja) 34/36/37% · v4 (+bonus SU 0,05) 34/36/37% · **v5 51/54/56%**, "tinggi" 54/56. Waktu median 1,5 s.
+Uji akhir Sidomulyo (60): v0 28% → **v5 65%** top-1, "tinggi" 24/24 (cakupan 40%).
+15 SU nyata: v5 top-1 1/15 (03767, "keyakinan tinggi", benar); versi keras v2.13 2/15. Dipilih v5 karena versi keras membuang kandidat bila petunjuk SU salah (keluhan pengguna: hasil jauh, 1 kemungkinan).

@@ -32,6 +32,11 @@ function cekKewajaran(r) {
   const tanda = (lvl, t) => out.push(`<li class="qc-${lvl}">${t}</li>`);
   if (lin && S.parcel) { const sk = cekSkala(Math.sqrt(lin / CORE.polyArea(S.parcel))); if (sk && Math.abs(sk.beda) > 10) tanda('info', `Ukuran bidang menurut skala 1:${esc($('inSkala').value)} berbeda ${fmt(sk.beda, 1)}% dari luas. Wajar bila hasil scan PDF tidak seukuran kertas aslinya; luas tetap dipakai sebagai acuan. Bila bentuk bidang tampak salah, periksa luas atau gambarnya.`); else if (sk) tanda('ok', `Luas cocok dengan skala 1:${esc($('inSkala').value)} pada gambar (selisih ${fmt(sk.beda, 1)}%).`); }
   if (lin) { const d = (raw / lin - 1) * 100; Math.abs(d) > 10 ? tanda('warn', `Bidang pada gambar × skala hasil cocok = ${fmt(raw, 0)} m² (selisih ${fmt(d, 1)}% dari luas yang diisi). Gambar mungkin tidak berskala, atau luasnya keliru.`) : tanda('ok', `Skala hasil cocok konsisten dengan luas (selisih ${fmt(d, 1)}%).`); }
+  try {
+    const pd = persilDiHasil();
+    if (pd) { const b = pd.b, Lp = b.luas || Math.round(b.luasPoligon), d = lin ? (Lp / lin - 1) * 100 : 0;
+      tanda(Math.abs(d) <= 10 ? 'ok' : 'info', `Bidang persil di lokasi ini (${Math.round(pd.f * 100)}% bertumpuk): ${b.nib ? 'NIB ' + esc(b.nib) + ', ' : ''}${b.su ? esc(b.su.teks) + ', ' : ''}luas <b>${Lp} m²</b>${lin ? ` (luas SU ${fmt(lin, 0)} m², selisih ${fmt(d, 1)}%)` : ''}.`); }
+  } catch (e) { /* abaikan */ }
   if (r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
     else if (r.score < 0.8) tanda('warn', 'Skor kecocokan sedang. Bandingkan gambar dengan citra satelit sebelum dipakai.');
@@ -1117,11 +1122,6 @@ function areaPola() {
   const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value, th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun;
   if (!no || !kel) return null;
   const kode = kodeKelAktif();
-  if (PERSIL.bidang.length && PERSIL.pakai !== false && kode && th) {
-    const tet = PERSIL.bidang.filter(b => b.su && b.su.kode === kode && b.su.tahun === th && b.su.nomor !== no && Math.abs(b.su.nomor - no) <= POLA.maksSelisihNomor)
-      .sort((a, b) => Math.abs(a.su.nomor - no) - Math.abs(b.su.nomor - no)).slice(0, PERSIL_ATUR.k);
-    if (tet.length) return { lingkaran: tet.map(b => ({ lat: b.c[0], lon: b.c[1], r: PERSIL_ATUR.r })), persil: true, sumber: `data persil: sekitar SU ${tet.map(b => b.su.nomor + '/' + b.su.tahun).join(', ')}` };
-  }
   const tet = Object.values(SUKET).filter(x => x.kel === kel && x.nomor !== no && Math.abs(x.nomor - no) <= POLA.maksSelisihNomor)
     .sort((a, b) => Math.abs(a.nomor - no) - Math.abs(b.nomor - no)).slice(0, POLA.kTetangga);
   if (!tet.length) return null;
@@ -1143,6 +1143,7 @@ function dalamArea(cs, x, y, ex) { return cs.some(c => Math.hypot(x - c.x, y - c
 // kandidat akhir disaring: pusat bidang harus di dalam salah satu lingkaran (saringPola).
 const POLA_JANGKAR_EKSTRA = 100;
 function polaInArea() {
+  if (PERSIL._areaB) return PERSIL._areaB; // pencarian tambahan di sekitar SU bernomor dekat (bantuan persil)
   const a = areaPolaSah(); if (!a) return null;
   const cs = lingkaranXY(a), kel = inAreaFn;
   return (x, y) => kel(x, y) && dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA); // tetap di dalam kelurahan
@@ -1183,6 +1184,7 @@ function gambarAreaPola() {
   if (!G.pola) G.pola = L.layerGroup().addTo(map);
   G.pola.clearLayers();
   const a = areaPolaSah();
+  if (persilAktif() && PROJ) { const cs = lingkaranSU(); if (cs) for (const c of cs) { L.circle(c.ll, { radius: c.r, color: '#8A6D3B', weight: 1.5, dashArray: '3 6', fill: false, interactive: false }).addTo(G.pola); } }
   if (a) for (const L0 of a.lingkaran) L.circle([L0.lat, L0.lon], { radius: L0.r, color: '#1F5E5B', weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(G.pola);
 }
 function renderPola() {
@@ -1325,23 +1327,53 @@ function gambarPersil() {
     let n = 0;
     for (const b of PERSIL.bidang) {
       if (b.bb[2] < B.s - m || b.bb[0] > B.n + m || b.bb[3] < B.w - m || b.bb[1] > B.e + m || b.luasPoligon > PERSIL_ATUR.refMaksLuas * 20) continue;
-      const pl = L.polygon(b.ll, { renderer: PERSIL.rend, color: '#8A6D3B', weight: 1, fill: true, fillOpacity: 0.03, opacity: 0.8 });
-      pl.bindPopup(() => `<b>${b.nib ? 'NIB ' + esc(b.nib) : 'Tanpa NIB'}</b><br>${esc(b.hak || 'Nomor hak: –')}<br>${esc(b.su ? b.su.teks : 'SU: –')}<br>Luas ${b.luas ? b.luas + ' m² (label)' : '–'} · poligon ${Math.round(b.luasPoligon)} m²`);
-      pl.addTo(G.persil); n++;
+      L.polygon(b.ll, { renderer: PERSIL.rend, color: '#8A6D3B', weight: 1, fill: false, opacity: 0.8, interactive: false }).addTo(G.persil); n++;
     }
     LOG.info(`Persil digambar di peta: ${n} bidang`);
+    if (!PERSIL._klik) { PERSIL._klik = true; map.on('click', e => { const b = bidangPersilDi(e.latlng.lat, e.latlng.lng); if (b) L.popup().setLatLng(e.latlng).setContent(teksPersil(b)).openOn(map); }); }
   } catch (e) { LOG.warn('Persil tidak bisa digambar di peta', e.message); }
 }
 // bidang persil di dalam area (koordinat lokal), untuk penalti tumpang tindih & hitung "sisi menempel"
+function persilAktif() { return POLA.on && PERSIL.pakai !== false && PERSIL.bidang.length > 0 && !!PROJ && !!S.wil; }
+// bidang persil berlabel (<5000 m²) di kelurahan terpilih, koordinat lokal — acuan tumpang tindih & "sisi menempel"
 function polaRef() {
-  const a = areaPolaSah(); if (!a || !a.persil) return undefined;
-  const cs = lingkaranXY(a);
-  const ref = PERSIL.bidang.filter(b => b.luasPoligon < PERSIL_ATUR.refMaksLuas && (b.nib || b.su || b.hak)).map(b => b.ll.map(p => PROJ.fwd(p[0], p[1])))
-    .filter(pp => { const q = CORE.centroid(pp); return dalamArea(cs, q[0], q[1], 150); });
-  return ref;
+  if (!persilAktif()) return undefined;
+  const B = wilBBox(), m = 0.003, key = S.wil.name + '|' + PERSIL.bidang.length;
+  if (PERSIL._ref && PERSIL._ref.key === key) return PERSIL._ref.xy;
+  const xy = PERSIL.bidang.filter(b => b.luasPoligon < PERSIL_ATUR.refMaksLuas && (b.nib || b.su || b.hak) && !(b.bb[2] < B.s - m || b.bb[0] > B.n + m || b.bb[3] < B.w - m || b.bb[1] > B.e + m))
+    .map(b => b.ll.map(p => PROJ.fwd(p[0], p[1])));
+  PERSIL._ref = { key, xy };
+  return xy;
+}
+// lingkaran 60 m di sekitar 3 SU bernomor terdekat (kode & tahun sama) — hanya MENAMBAH kandidat, tidak membuang
+function lingkaranSU() {
+  const no = +($('inNoSU') && $('inNoSU').value), th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun, kode = kodeKelAktif();
+  if (!no || !th || !kode) return null;
+  const tet = PERSIL.bidang.filter(b => b.su && b.su.kode === kode && b.su.tahun === th && b.su.nomor !== no && Math.abs(b.su.nomor - no) <= POLA.maksSelisihNomor)
+    .sort((a, b) => Math.abs(a.su.nomor - no) - Math.abs(b.su.nomor - no)).slice(0, PERSIL_ATUR.k)
+    .map(b => { const c = PROJ.fwd(b.c[0], b.c[1]); return { x: c[0], y: c[1], r: PERSIL_ATUR.r, su: b.su.nomor + '/' + b.su.tahun, ll: b.c }; }).filter(c => inAreaFn(c.x, c.y));
+  return tet.length ? tet : null;
+}
+async function tambahKandidatPersil(cands, s0, opt, logf) {
+  const cs = lingkaranSU(); PERSIL._cs = cs;
+  if (!cs) { LOG.info('Bantuan persil: tidak ada SU bernomor dekat di kelurahan ini; kandidat dari seluruh kelurahan'); return cands; }
+  PERSIL._areaB = (x, y) => inAreaFn(x, y) && dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA);
+  let tambah = 0;
+  try {
+    const ctxB = buildCtx(s0, true), out = await CORE.matchAll(ctxB, opt, () => {}, logf), pc = CTX.parcelC;
+    for (const k of out) {
+      const p = CORE.fwdT(k.T, pc[0], pc[1]); if (!dalamArea(cs, p[0], p[1], 0)) continue;
+      if (cands.some(u => { const q = CORE.fwdT(u.T, pc[0], pc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 20; })) continue;
+      cands.push({ T: k.T, r: CORE.score(CTX, k.T, true), dekatSU: true }); tambah++;
+    }
+  } catch (e) { LOG.warn('Pencarian di sekitar SU bernomor dekat gagal', e.message); }
+  finally { PERSIL._areaB = null; }
+  LOG.info(`Bantuan persil: ${tambah} kandidat tambahan di sekitar SU ${cs.map(c => c.su).join(', ')}`);
+  return cands;
 }
 function tempelPersil(T, ctx, ref) {
-  const pm = ctx.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), tutup = ref.map(pp => pp.concat([pp[0]]));
+  const pm = ctx.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), c0 = CORE.centroid(pm);
+  const tutup = ref.filter(pp => Math.hypot(pp[0][0] - c0[0], pp[0][1] - c0[1]) < 80).map(pp => pp.concat([pp[0]]));
   let n = 0, ok = 0;
   for (let i = 0; i < pm.length; i++) {
     const a = pm[i], b = pm[(i + 1) % pm.length], m = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])));
@@ -1424,3 +1456,29 @@ const bacaSaja = safe('Baca saja', async id => {
     toast(`Luas ${L0 ? L0 + ' m²' : 'tidak terbaca (isi manual)'}${sk ? ', skala 1:' + sk : ''}. Gambar halaman ${hg} siap: telusuri jalan, lalu bidang, lalu Cocokkan.`, L0 ? 'ok' : 'warn');
   } finally { prosesSelesai(); }
 });
+
+// bidang persil TERKECIL yang memuat titik (poligon besar seperti blok/batas tidak menutupi bidang di dalamnya)
+function bidangPersilDi(lat, lon) {
+  let best = null;
+  for (const b of PERSIL.bidang) {
+    if (lat < b.bb[0] || lat > b.bb[2] || lon < b.bb[1] || lon > b.bb[3]) continue;
+    if (!CORE.pointInRing(lat, lon, b.ll)) continue;
+    if (!best || b.luasPoligon < best.luasPoligon) best = b;
+  }
+  return best;
+}
+function teksPersil(b) {
+  return `<b>${b.nib ? 'NIB ' + esc(b.nib) : 'Tanpa NIB'}</b><br>${esc(b.hak || 'Nomor hak: –')}<br>${esc(b.su ? b.su.teks : 'SU: –')}<br>Luas ${b.luas ? '<b>' + b.luas + ' m²</b> (label)' : '–'} · poligon ${Math.round(b.luasPoligon)} m²`;
+}
+// bidang persil di posisi hasil (tumpang tindih terbesar), untuk pemeriksaan data
+function persilDiHasil() {
+  if (!PERSIL.bidang.length || !S.T) return null;
+  const ll = finalLL(), c = CORE.centroid(ll), smp = CORE.interiorSamples(ll, 30);
+  let best = null;
+  for (const b of PERSIL.bidang) {
+    if (b.luasPoligon > PERSIL_ATUR.refMaksLuas || b.bb[2] < c[0] - 0.002 || b.bb[0] > c[0] + 0.002 || b.bb[3] < c[1] - 0.002 || b.bb[1] > c[1] + 0.002) continue;
+    const f = smp.filter(p => CORE.pointInRing(p[0], p[1], b.ll)).length / smp.length;
+    if (f > 0.05 && (!best || f > best.f)) best = { b, f };
+  }
+  return best;
+}

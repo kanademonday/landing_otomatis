@@ -38,12 +38,17 @@ const HELD = new Set(['Sidomulyo']);
       // tetangga nomor SU (kode & tahun sama), bidang ini sendiri dikeluarkan
       const tet = semua.filter(b => b !== B && b.su && b.su.kode === B.su.kode && b.su.tahun === B.su.tahun && b.su.nomor !== B.su.nomor && Math.abs(b.su.nomor - B.su.nomor) <= 300)
         .sort((a, b) => Math.abs(a.su.nomor - B.su.nomor) - Math.abs(b.su.nomor - B.su.nomor)).slice(0, K);
-      if (varian !== 'v0' && !tet.length) continue;
+      if ((varian === 'v1' || varian === 'v2') && !tet.length) continue;
+      const refSemua = () => per[kel].filter(b => b !== B && b.luasPoligon < 5000 && (b.nib || b.su || b.hak)).map(b => b.pts.map(keXY));
       const s = CFG.skala_m_per_px[0] * Math.exp(R() * Math.log(CFG.skala_m_per_px[1] / CFG.skala_m_per_px[0]));
       const Gm = G.keGambar({ roads, parcelW: PW }, { s, th: 0 }, R);
       const Kc = { id: `${kel}-${B.su.nomor}/${B.su.tahun}`, kel, luas: CORE.polyArea(PW), utara: 'kira', ...Gm };
       let W2 = Wl, cs = null, rA = null;
-      if (varian !== 'v0') { // gabungan lingkaran radius R0 di sekitar tiap SU tetangga
+      if (varian === 'v5') { W2 = { ...Wl, refXY: refSemua() }; cs = tet.length ? tet.map(b => CORE.centroid(b.pts.map(keXY))) : null; }
+      else if (varian === 'v3' || varian === 'v4') {
+        W2 = { ...Wl, refXY: per[kel].filter(b => b !== B && b.luasPoligon < 5000 && (b.nib || b.su || b.hak)).map(b => b.pts.map(keXY)) };
+        if (varian === 'v4') W2._dekatSU = tet.map(b => CORE.centroid(b.pts.map(keXY)));
+      } else if (varian !== 'v0') { // gabungan lingkaran radius R0 di sekitar tiap SU tetangga
         cs = tet.map(b => CORE.centroid(b.pts.map(keXY))); rA = R0;
         const dalam = (x, y, ex) => cs.some(q => Math.hypot(x - q[0], y - q[1]) < rA + ex);
         W2 = { ...Wl, inArea: (x, y) => dalam(x, y, 100), _dalam: dalam };
@@ -52,16 +57,23 @@ const HELD = new Set(['Sidomulyo']);
       const t0 = Date.now(); let res;
       try { res = await cocokkan(W2, Kc); } catch (e) { rows.push({ id: Kc.id, kel, error: e.message }); made++; continue; }
       let list = res.list;
-      if (cs) { const pc = res.CTX.parcelC, f = list.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return W2._dalam(p[0], p[1], 0); }); if (f.length) list = f; }
+      if (varian === 'v5' && cs) { // tambah kandidat dari area sekitar SU bernomor dekat (tanpa membuang kandidat seluruh kelurahan)
+        const dalam = (x, y, ex) => cs.some(q => Math.hypot(x - q[0], y - q[1]) < 60 + ex);
+        try { const r2 = await cocokkan({ ...W2, inArea: (x, y) => Wl.inArea(x, y) && dalam(x, y, 100) }, Kc); const pc = r2.CTX.parcelC;
+          for (const k of r2.list) { const p = CORE.fwdT(k.T, pc[0], pc[1]); if (!dalam(p[0], p[1], 0)) continue; if (list.some(u => { const q = CORE.fwdT(u.T, pc[0], pc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 20; })) continue; list = list.concat([k]); } } catch (e) { /* tidak ada hipotesis di area */ }
+      }
+      if (cs && varian !== 'v5') { const pc = res.CTX.parcelC, f = list.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return W2._dalam(p[0], p[1], 0); }); if (f.length) list = f; }
       // sisi menempel: porsi keliling bidang (posisi kandidat) yang ≤1,5 m dari tepi bidang persil lain
-      const tempel = T => { if (!W2.refXY) return 0; const pm = res.CTX.parcelM.map(p => CORE.fwdT(T, p[0], p[1])); let n = 0, ok = 0;
+      const tempel = T => { if (!W2.refXY) return 0; const pm = res.CTX.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), pc0 = CORE.centroid(pm);
+        const refDekat = W2.refXY.filter(pp => { const q = pp[0]; return Math.hypot(q[0] - pc0[0], q[1] - pc0[1]) < 80; }); let n = 0, ok = 0;
         for (let i = 0; i < pm.length; i++) { const a = pm[i], b = pm[(i + 1) % pm.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(2, Math.ceil(L)); for (let j = 0; j < m; j++) { const q = [a[0] + (b[0] - a[0]) * (j + .5) / m, a[1] + (b[1] - a[1]) * (j + .5) / m]; n++;
-          if (W2.refXY.some(pp => CORE.plNearest(pp.concat([pp[0]]), q).d <= 1.5)) ok++; } } return ok / n; };
+          if (refDekat.some(pp => CORE.plNearest(pp.concat([pp[0]]), q).d <= 1.5)) ok++; } } return ok / n; };
       const e = list.map(k => { const p = CORE.fwdT(k.T, res.CTX.parcelC[0], res.CTX.parcelC[1]); return Math.hypot(p[0] - c[0], p[1] - c[1]); });
       // ATURAN TERKUNCI (dari tuning): urut ulang skor + 0,2×tempel; "keyakinan tinggi" bila tempel#1≥0,5, tempel#2<0,3, skor≥0,8
       let labelP = null;
       if (W2.refXY && arg('final')) {
-        const o = list.map((k, i) => ({ k, e: e[i], t: tempel(k.T) })).sort((a, b) => (b.k.r.score + 0.2 * b.t) - (a.k.r.score + 0.2 * a.t));
+        const bonus = k => { if (!W2._dekatSU) return 0; const p = CORE.fwdT(k.T, res.CTX.parcelC[0], res.CTX.parcelC[1]); return W2._dekatSU.some(q => Math.hypot(p[0] - q[0], p[1] - q[1]) < 60) ? +arg('bonus', 0.05) : 0; };
+        const o = list.map((k, i) => ({ k, e: e[i], t: tempel(k.T), b: bonus(k) })).sort((a, b) => (b.k.r.score + 0.2 * b.t + b.b) - (a.k.r.score + 0.2 * a.t + a.b));
         list = o.map(x => x.k); e.splice(0, e.length, ...o.map(x => x.e));
         labelP = o[0].t >= 0.5 && (!o[1] || o[1].t < 0.3) && o[0].k.r.score >= 0.8 ? 'keyakinan tinggi' : 'perlu verifikasi';
       }

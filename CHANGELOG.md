@@ -2,6 +2,13 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.17.0 — 2026-11-25 — Bantuan persil tidak lagi memaksa area; popup luas persil diperbaiki
+- **Dengan bantuan persil** kini mencari di **seluruh kelurahan** (bidang tidak boleh menimpa bidang persil), lalu **menambah** kandidat dari sekitar 3 SU bernomor dekat (lingkaran 60 m, digambar putus-putus cokelat). Kandidat lain tidak dibuang, sehingga hasil tidak lagi tertarik jauh atau tinggal 1 kemungkinan. Urutan: skor + 0,2 × porsi sisi menempel; "keyakinan tinggi" bila ≥50% sisi menempel, kandidat kedua <30%, skor ≥0,8.
+- Uji (bidang persil yang sudah berlokasi diperlakukan seolah belum dilanding): tuning 160 kasus #1 31% → 51% ("keyakinan tinggi" 54/56); uji akhir Sidomulyo 60 kasus **28% → 65%**, "keyakinan tinggi" **24/24**. 15 SU nyata: 1 di #1 (keyakinan tinggi, benar), tanpa label tinggi yang salah.
+- **Popup persil**: klik peta kini menampilkan bidang **terkecil** di titik itu (sebelumnya poligon besar tanpa label, mis. 36.216 m², menutupi semua bidang sehingga luasnya selalu sama).
+- Pemeriksaan data di langkah 4 menampilkan **bidang persil di lokasi hasil** beserta luasnya dan selisihnya dengan luas SU.
+- core.js: indeks kisi untuk cek tumpang tindih dengan ribuan bidang acuan (hasil identik; tes 480/480).
+
 ## v2.16.0 — 2026-11-25
 - Pilihan arah utara baru: **Utara di atas, yakin sekali (±3°)**. Bawaan tetap *kira-kira (±45°)*: pada 15 SU nyata Sidomulyo, posisi benar memerlukan putaran 8–12° dari panah utara gambar; dengan ±3° tidak ada yang benar di #1 dan beberapa SU tidak menghasilkan kandidat (±45°/±15°: 1/15 di #1, 4/15 di 6 besar).
 
