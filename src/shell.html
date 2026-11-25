@@ -402,6 +402,13 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
       <label class="cek" style="margin-top:10px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas BT/SU</label>
       <button class="btn pri" id="btnCopyAcad" style="width:100%;height:42px;margin-top:10px">Salin bidang untuk AutoCAD</button>
+<p class="hint" style="margin-top:8px"><b>Cara cepat (disarankan):</b> pasang perintah <b>TB</b> sekali saja, lalu setiap kali selesai menyalin cukup ketik <b>TB</b> Enter di AutoCAD; bidang langsung tergambar di koordinat aslinya.</p>
+      <button class="btn" id="btnUnduhTB" style="width:100%">Unduh perintah TB untuk AutoCAD (sekali saja)</button>
+      <ol class="langkah">
+        <li>Di AutoCAD ketik <b>APPLOAD</b> Enter, pilih file <b>TB.lsp</b> yang diunduh, klik <b>Load</b>. Agar otomatis setiap AutoCAD dibuka: di jendela yang sama klik <b>Contents…</b> (Startup Suite) → <b>Add…</b> → pilih TB.lsp.</li>
+        <li>Klik <b>Salin bidang untuk AutoCAD</b> di atas, lalu di AutoCAD ketik <b>TB</b> Enter.</li>
+      </ol>
+      <p class="hint"><b>Tanpa TB:</b> Ctrl+V di area gambar hanya menempelkan <i>tulisan</i>. Tempelkan di <i>command line</i>:</p>
 <ol class="langkah">
         <li>Di AutoCAD, tekan <b>Esc</b> dua kali agar tidak ada perintah yang sedang berjalan.</li>
         <li>Klik kotak <i>command line</i> di bagian bawah (bukan area gambar).</li>

@@ -73,3 +73,16 @@ Varian `persil.js --varian v5 --final 1`: seluruh kelurahan dengan acuan persil 
 Tuning (160, kasus dengan maupun tanpa SU tetangga): v0 31/39/45% · v3 (acuan saja) 34/36/37% · v4 (+bonus SU 0,05) 34/36/37% · **v5 51/54/56%**, "tinggi" 54/56. Waktu median 1,5 s.
 Uji akhir Sidomulyo (60): v0 28% → **v5 65%** top-1, "tinggi" 24/24 (cakupan 40%).
 15 SU nyata: v5 top-1 1/15 (03767, "keyakinan tinggi", benar); versi keras v2.13 2/15. Dipilih v5 karena versi keras membuang kandidat bila petunjuk SU salah (keluhan pengguna: hasil jauh, 1 kemungkinan).
+
+## v6 — kandidat "tumpuk" bentuk + luas persil (v2.18)
+Poligon persil di kelurahan dengan luas ±15% dan kemiripan bentuk ≥0,8 (putaran dalam toleransi utara) dijadikan kandidat; urutan = skor jalan + 0,2×tempel + wBentuk×bentuk. Label NIB/hak/SU tidak dipakai.
+Tuning (Pelita, Selili, Sidodamai, Sungai Dama; 160 kasus, top-1):
+| wBentuk | bidang ada di persil | bidang belum ada |
+|---|---|---|
+| v5 (tanpa bentuk) | 82 | 82 |
+| 0 | 135 | 82 |
+| **0,1 (dipakai)** | **144** | 81 |
+| 0,2 | 142 | 76 |
+| 0,4 | 133 | 67 |
+Uji akhir Sidomulyo (40 kasus, sekali jalan): v5 21 → v6 34 bila bidang ada di persil; 19 bila belum ada (v5 21).
+Label: penempatan label ke poligon kini memakai kecocokan luas label (rasio 0,6–1,7); blok/jalan besar tidak lagi "mengambil" NIB.

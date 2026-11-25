@@ -8,6 +8,18 @@ const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ?
 const LD = require('./loader.js'), CORE = LD.CORE, G = require('./gen.js');
 const CFG = JSON.parse(fs.readFileSync(__dirname + '/config.json'));
 const { cocokkan, conf } = require('./cocok.js')(CORE, CFG, null);
+function miripBentuk(skM, pW, thTol) {
+  const cA = CORE.centroid(skM), cB = CORE.centroid(pW), k = Math.sqrt(CORE.polyArea(pW) / CORE.polyArea(skM));
+  const A = skM.map(p => [(p[0] - cA[0]) * k, (p[1] - cA[1]) * k]), B = pW.map(p => [p[0] - cB[0], p[1] - cB[1]]);
+  const bbOf = P => [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1]))];
+  const sB = CORE.interiorSamples(B, 40), Bb = { pts: B, bb: bbOf(B) }; let best = { s: -1 };
+  for (let a = -thTol; a <= thTol + 1e-9; a += 3 * Math.PI / 180) {
+    const c = Math.cos(a), sn = Math.sin(a), Rr = A.map(p => [c * p[0] - sn * p[1], sn * p[0] + c * p[1]]);
+    const v = Math.min(CORE.overlapFrac(CORE.interiorSamples(Rr, 40), [Bb]), CORE.overlapFrac(sB, [{ pts: Rr, bb: bbOf(Rr) }]));
+    if (v > best.s) best = { s: v, a, k };
+  }
+  return best;
+}
 const DIR = __dirname + '/real/persil', varian = arg('varian', 'v1'), N = +arg('n', 40), R0 = +arg('r', 100), K = +arg('k', 3);
 const KEL = { 'persil Pelita.dxf': 'Pelita', 'persil Sidodamai.dxf': 'Sidodamai', 'persil Sidomulyo.dxf': 'Sidomulyo', 'persil Sungai Dama.dxf': 'Sungai Dama', 'persil selili.dxf': 'Selili' };
 const HELD = new Set(['Sidomulyo']);
@@ -44,7 +56,7 @@ const HELD = new Set(['Sidomulyo']);
       const Gm = G.keGambar({ roads, parcelW: PW }, { s, th: 0 }, R);
       const Kc = { id: `${kel}-${B.su.nomor}/${B.su.tahun}`, kel, luas: CORE.polyArea(PW), utara: 'kira', ...Gm };
       let W2 = Wl, cs = null, rA = null;
-      if (varian === 'v5') { W2 = { ...Wl, refXY: refSemua() }; cs = tet.length ? tet.map(b => CORE.centroid(b.pts.map(keXY))) : null; }
+      if (varian === 'v5' || varian === 'v6') { W2 = { ...Wl, refXY: refSemua() }; cs = tet.length ? tet.map(b => CORE.centroid(b.pts.map(keXY))) : null; }
       else if (varian === 'v3' || varian === 'v4') {
         W2 = { ...Wl, refXY: per[kel].filter(b => b !== B && b.luasPoligon < 5000 && (b.nib || b.su || b.hak)).map(b => b.pts.map(keXY)) };
         if (varian === 'v4') W2._dekatSU = tet.map(b => CORE.centroid(b.pts.map(keXY)));
@@ -57,12 +69,23 @@ const HELD = new Set(['Sidomulyo']);
       const t0 = Date.now(); let res;
       try { res = await cocokkan(W2, Kc); } catch (e) { rows.push({ id: Kc.id, kel, error: e.message }); made++; continue; }
       let list = res.list;
-      if (varian === 'v5' && cs) { // tambah kandidat dari area sekitar SU bernomor dekat (tanpa membuang kandidat seluruh kelurahan)
+      if ((varian === 'v5' || varian === 'v6') && cs) { // tambah kandidat dari area sekitar SU bernomor dekat (tanpa membuang kandidat seluruh kelurahan)
         const dalam = (x, y, ex) => cs.some(q => Math.hypot(x - q[0], y - q[1]) < 60 + ex);
         try { const r2 = await cocokkan({ ...W2, inArea: (x, y) => Wl.inArea(x, y) && dalam(x, y, 100) }, Kc); const pc = r2.CTX.parcelC;
           for (const k of r2.list) { const p = CORE.fwdT(k.T, pc[0], pc[1]); if (!dalam(p[0], p[1], 0)) continue; if (list.some(u => { const q = CORE.fwdT(u.T, pc[0], pc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 20; })) continue; list = list.concat([k]); } } catch (e) { /* tidak ada hipotesis di area */ }
       }
-      if (cs && varian !== 'v5') { const pc = res.CTX.parcelC, f = list.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return W2._dalam(p[0], p[1], 0); }); if (f.length) list = f; }
+      if (cs && varian !== 'v5' && varian !== 'v6') { const pc = res.CTX.parcelC, f = list.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return W2._dalam(p[0], p[1], 0); }); if (f.length) list = f; }
+      if (varian === 'v6') { // kandidat bentuk: poligon persil yang luas (±15%) & bentuknya mirip, diselaraskan dengan sketsa
+        const ada = +arg('ada', 1), pool = per[kel].filter(b => (ada || b !== B) && b.luasPoligon < 5000 && Math.abs(b.luasPoligon / Kc.luas - 1) <= 0.15);
+        const s0 = Math.sqrt(Kc.luas / CORE.polyArea(Kc.parcel)), skM = res.CTX.parcelM.map(p => [p[0] * s0, p[1] * s0]), cA = CORE.centroid(res.CTX.parcelM);
+        for (const b of pool) {
+          const pw = b.pts.map(keXY), cq = CORE.centroid(pw); if (!Wl.inArea(cq[0], cq[1])) continue;
+          const m = miripBentuk(skM, pw, 45 * Math.PI / 180); if (m.s < 0.8) continue;
+          const T = { s: s0 * m.k, th: m.a, tx: 0, ty: 0 }, p0 = CORE.fwdT(T, cA[0], cA[1]); T.tx = cq[0] - p0[0]; T.ty = cq[1] - p0[1];
+          if (list.some(u => { const q = CORE.fwdT(u.T, cA[0], cA[1]); return Math.hypot(cq[0] - q[0], cq[1] - q[1]) < 5; })) continue;
+          list.push({ T, r: CORE.score(res.CTX, T, true), bentuk: m.s });
+        }
+      }
       // sisi menempel: porsi keliling bidang (posisi kandidat) yang ≤1,5 m dari tepi bidang persil lain
       const tempel = T => { if (!W2.refXY) return 0; const pm = res.CTX.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), pc0 = CORE.centroid(pm);
         const refDekat = W2.refXY.filter(pp => { const q = pp[0]; return Math.hypot(q[0] - pc0[0], q[1] - pc0[1]) < 80; }); let n = 0, ok = 0;
@@ -73,13 +96,13 @@ const HELD = new Set(['Sidomulyo']);
       let labelP = null;
       if (W2.refXY && arg('final')) {
         const bonus = k => { if (!W2._dekatSU) return 0; const p = CORE.fwdT(k.T, res.CTX.parcelC[0], res.CTX.parcelC[1]); return W2._dekatSU.some(q => Math.hypot(p[0] - q[0], p[1] - q[1]) < 60) ? +arg('bonus', 0.05) : 0; };
-        const o = list.map((k, i) => ({ k, e: e[i], t: tempel(k.T), b: bonus(k) })).sort((a, b) => (b.k.r.score + 0.2 * b.t + b.b) - (a.k.r.score + 0.2 * a.t + a.b));
+        const wB = +arg('wBentuk', 0); const o = list.map((k, i) => ({ k, e: e[i], t: tempel(k.T), b: bonus(k) + wB * (k.bentuk || 0) })).sort((a, b) => (b.k.r.score + 0.2 * b.t + b.b) - (a.k.r.score + 0.2 * a.t + a.b));
         list = o.map(x => x.k); e.splice(0, e.length, ...o.map(x => x.e));
         labelP = o[0].t >= 0.5 && (!o[1] || o[1].t < 0.3) && o[0].k.r.score >= 0.8 ? 'keyakinan tinggi' : 'perlu verifikasi';
       }
       const rk = lim => { const i = e.findIndex(v => v <= lim); return i < 0 ? null : i + 1; };
       rows.push({ id: Kc.id, kel, split: HELD.has(kel) ? 'heldout' : 'tuning', nJalan: roads.length, simpang: res.CTX.skJ.length, prior_m: cs ? Math.round(Math.min(...cs.map(q => Math.hypot(q[0] - c[0], q[1] - c[1])))) : null,
-        rank: rk(15), rank5: rk(5), tempel: list.map(k => +tempel(k.T).toFixed(2)), errs: e.map(v => +v.toFixed(1)), err1: +e[0].toFixed(1), skor: list.map(k => +k.r.score.toFixed(3)), label: labelP || conf(list), nRef: W2.refXY ? W2.refXY.length : 0, ms: Date.now() - t0 });
+        rank: rk(15), rank5: rk(5), kand: list.map((k, i) => ({ s: +k.r.score.toFixed(3), b: k.bentuk ? +k.bentuk.toFixed(2) : 0, e: +e[i].toFixed(1) })), tempel: list.map(k => +tempel(k.T).toFixed(2)), errs: e.map(v => +v.toFixed(1)), err1: +e[0].toFixed(1), skor: list.map(k => +k.r.score.toFixed(3)), label: labelP || conf(list), nRef: W2.refXY ? W2.refXY.length : 0, ms: Date.now() - t0 });
       made++;
       if (made % 10 === 0) process.stderr.write(`${varian} ${kel} ${made}/${N}\n`);
     }

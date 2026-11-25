@@ -154,21 +154,34 @@ const CORE = (() => {
       if (!grp) g.push(grp = { y0: t.y, x: t.x, isi: [] });
       grp.isi.push({ s: s0, y: t.y });
     }
-    const cari = (x, y) => { const c = (grid.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []).filter(k => { const p = bid[k]; return x >= p.bb[0] && x <= p.bb[2] && y >= p.bb[1] && y <= p.bb[3] && pointInRing(x, y, p.pts); }); return c.length ? c.reduce((m, k) => bid[k].luasPoligon < bid[m].luasPoligon ? k : m) : -1; };
+    const memuat = (x, y) => (grid.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []).filter(k => { const p = bid[k]; return x >= p.bb[0] && x <= p.bb[2] && y >= p.bb[1] && y <= p.bb[3] && pointInRing(x, y, p.pts); });
+    const luasTeks = s0 => { const m = s0.match(/^Luas\s*:?\s*([\d.,]+)/i); return m ? +m[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.') : null; };
     let lepas = 0;
     for (const g of tumpuk.values()) for (const grp of g) {
       const ym = grp.isi.reduce((a, q) => a + q.y, 0) / grp.isi.length;
-      let k = cari(grp.x, ym); if (k < 0) for (const q of grp.isi) { k = cari(grp.x, q.y); if (k >= 0) break; }
+      const L0 = grp.isi.map(q => luasTeks(q.s)).find(v => v > 0) || null;
+      let cand = memuat(grp.x, ym); if (!cand.length) for (const q of grp.isi) { cand = memuat(grp.x, q.y); if (cand.length) break; }
+      // pilih poligon yang luasnya sesuai label; poligon besar (blok/jalan/batas) tidak boleh "mengambil" label bidang
+      let k = -1, fit = Infinity;
+      for (const c of cand) {
+        const A = bid[c].luasPoligon;
+        if (L0) { const r = A / L0; if (r < 0.6 || r > 1.7) continue; const f = Math.abs(Math.log(r)); if (f < fit) { fit = f; k = c; } }
+        else if (A <= 20000 && (k < 0 || A < bid[k].luasPoligon)) { k = c; fit = 1; }
+      }
       if (k < 0) { lepas += grp.isi.length; continue; }
       const p = bid[k];
+      if (p._fit != null && p._fit <= fit) { lepas += grp.isi.length; continue; } // poligon sudah punya label yang lebih cocok
+      if (p._fit != null) { p.nib = p.hak = p.su = p.luas = null; }
+      p._fit = fit;
       for (const { s: s0 } of grp.isi) {
         let m;
         if ((m = s0.match(/^SU\.?\s*(\d{8})(\d{5})\s*\/\s*(\d{4})/i))) p.su = { kode: m[1], nomor: +m[2], tahun: +m[3], teks: s0 };
         else if (/^\d{5}$/.test(s0)) p.nib = s0;
-        else if ((m = s0.match(/^Luas\s*:?\s*([\d.,]+)/i))) p.luas = +m[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.');
+        else if (luasTeks(s0)) p.luas = luasTeks(s0);
         else if (/^(M|HGB|HP|HPL|HW|W|HGU)\.\s*\d+/i.test(s0)) p.hak = s0.replace(/\s+/g, '');
       }
     }
+    for (const p of bid) delete p._fit;
     return { bidang: bid, teks: texts.length, teksLepas: lepas };
   }
   // Titik sampel di dalam poligon (untuk hitung tumpang tindih)
