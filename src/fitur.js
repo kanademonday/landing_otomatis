@@ -1117,7 +1117,7 @@ function areaPola() {
   const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value, th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun;
   if (!no || !kel) return null;
   const kode = kodeKelAktif();
-  if (PERSIL.bidang.length && kode && th) {
+  if (PERSIL.bidang.length && PERSIL.pakai !== false && kode && th) {
     const tet = PERSIL.bidang.filter(b => b.su && b.su.kode === kode && b.su.tahun === th && b.su.nomor !== no && Math.abs(b.su.nomor - no) <= POLA.maksSelisihNomor)
       .sort((a, b) => Math.abs(a.su.nomor - no) - Math.abs(b.su.nomor - no)).slice(0, PERSIL_ATUR.k);
     if (tet.length) return { lingkaran: tet.map(b => ({ lat: b.c[0], lon: b.c[1], r: PERSIL_ATUR.r })), persil: true, sumber: `data persil: sekitar SU ${tet.map(b => b.su.nomor + '/' + b.su.tahun).join(', ')}` };
@@ -1191,7 +1191,7 @@ function renderPola() {
   const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPolaSah();
   $('suketInfo').textContent = kel ? `${n} SU di ${kel} sudah tercatat ketemu (tersimpan di browser ini).` : 'Pilih kelurahan dulu di langkah 1.';
   $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran ' : ''}radius <b>${Math.round(a.lingkaran[0].r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
-  renderSUPersil();
+  renderSUPersil(); renderPersilTombol();
   try { renderReady(); } catch (e) { /* abaikan */ }
   try { gambarAreaPola(); } catch (e) { LOG.warn('Lingkaran area tidak bisa digambar di peta', e.message); }
 }
@@ -1256,7 +1256,7 @@ function bukaSetAI() {
    (2) area pencarian di sekitar SU bernomor berdekatan (kode & tahun sama);
    (3) bidang tidak boleh menimpa bidang persil; kandidat yang sisinya menempel bidang tetangga diutamakan.
    Setelan dikunci dari benchmark tuning (tests/benchmark/persil.js): k=3, r=60 m, bobot tempel 0,2. */
-const PERSIL = { bidang: [], file: [] };
+const PERSIL = { bidang: [], file: [], pakai: true }; // pakai: dipilih lewat tombol 'Mulai pencocokan' (false) / 'Dengan bantuan persil' (true)
 const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000 };
 function idb() { return new Promise((ok, no) => { const r = indexedDB.open('plotkw', 1); r.onupgradeneeded = () => r.result.createObjectStore('data'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
 async function idbSet(k, v) { const d = await idb(); return new Promise((ok, no) => { const t = d.transaction('data', 'readwrite'); t.objectStore('data').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); }
@@ -1291,6 +1291,25 @@ const muatPersil = safe('Muat data persil', async files => {
   try { await idbSet('persil', { file: PERSIL.file, bidang: PERSIL.bidang }); } catch (e) { LOG.warn('Data persil tidak bisa disimpan di browser; perlu dimuat ulang lain kali', e.message); }
   if (!POLA.on) { POLA.on = true; $('inPola').checked = true; try { localStorage.setItem('plotkw.pola', '1'); } catch (e) { /* abaikan */ } toast('Mode pola jalan diaktifkan agar data persil dipakai saat mencari.', 'ok'); }
   renderPersilInfo(); gambarPersil(); renderPola();
+});
+// tombol 'Dengan bantuan persil' aktif bila data persil ada dan nomor/tahun SU diketahui
+function renderPersilTombol() {
+  const b = $('btnMatchPersil'), el = $('matchPersilInfo'); if (!b) return;
+  const no = $('inNoSU') && $('inNoSU').value, th = ($('inThSU') && $('inThSU').value) || POLA.su.tahun, kode = kodeKelAktif();
+  const alasan = !PERSIL.bidang.length ? 'Muat file persil (.dxf) di langkah 1 untuk memakai bantuan persil.'
+    : !no || !th ? 'Isi nomor & tahun SU (Pengaturan → Mode pola jalan, terisi otomatis dari nama file SU) untuk memakai bantuan persil.'
+    : !kode ? 'Kode kelurahan ini belum dikenal di data persil; bantuan persil tidak tersedia.'
+    : !PERSIL.bidang.some(x => x.su && x.su.kode === kode) ? 'Data persil untuk kelurahan ini belum dimuat.' : '';
+  b.disabled = !!alasan; el.textContent = alasan;
+}
+const mulaiDenganPersil = safe('Pencocokan dengan bantuan persil', async () => {
+  renderPersilTombol(); if ($('btnMatchPersil').disabled) throw new Error($('matchPersilInfo').textContent);
+  PERSIL.pakai = true;
+  if (!POLA.on) { POLA.on = true; $('inPola').checked = true; try { localStorage.setItem('plotkw.pola', '1'); } catch (e) { /* abaikan */ } renderPola(); }
+  const a = areaPolaSah();
+  LOG.info('Pencocokan dengan bantuan persil', a ? { area: a.sumber } : { area: 'tidak ada SU tetangga di persil; seluruh kelurahan' });
+  if (!a || !a.persil) toast('Tidak ada SU bernomor berdekatan di data persil untuk SU ini; dicari di seluruh kelurahan.', 'warn');
+  await runMatch();
 });
 function renderPersilInfo() {
   const el = $('persilInfo'); if (!el) return;

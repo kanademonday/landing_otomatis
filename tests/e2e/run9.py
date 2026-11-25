@@ -49,6 +49,7 @@ async def main():
     import math
     T0=await pg.evaluate("JSON.stringify(S.cands.map(c=>[c.T,c.r.score]))")
     lab0=await pg.evaluate("conf(0)[0]")
+    print('tanpa data persil: tombol bantuan persil nonaktif', await pg.evaluate("$('btnMatchPersil').disabled"), '|', await pg.inner_text('#matchPersilInfo'))
     print('mode pola MATI: label #1 =',lab0,'| kandidat',await pg.evaluate("S.cands.length"))
     # aktifkan mode pola; catat SU tetangga (no. 100) tepat di lokasi benar, cari SU no. 101
     await pg.evaluate("document.querySelector('#inPola').closest('details').open=true")

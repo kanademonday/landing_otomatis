@@ -2,6 +2,10 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.15.0 — 2026-11-25 — Dua tombol pencocokan
+- Langkah 3 kini punya **Mulai pencocokan** (tanpa data persil) dan **Dengan bantuan persil** (area di sekitar SU bernomor berdekatan, tidak menimpa bidang persil, utamakan yang menempel bidang tetangga; otomatis menyalakan mode pola).
+- Tombol *Dengan bantuan persil* nonaktif dengan alasan yang tertulis bila data persil belum dimuat, nomor/tahun SU belum ada, atau kelurahan ini tidak ada di data persil.
+
 ## v2.14.2 — 2026-11-25 — Perbaikan mode pola: pencarian tidak lagi tertarik keluar kelurahan
 - Petunjuk lokasi (titik perkiraan, kode & tahun SU) dari SU atau kelurahan sebelumnya kini dikosongkan saat kelurahan berganti dan saat *Bidang baru*; membuka SU baru selalu mengganti kode & tahun (sebelumnya kode lama terbawa bila nama file baru tidak memuatnya).
 - Kode SU yang milik kelurahan lain tidak dipakai untuk mencari SU tetangga di data persil.

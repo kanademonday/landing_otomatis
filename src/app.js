@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.14.2';
+const APP_VERSION = '2.15.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -871,7 +871,7 @@ const runMatch = safe('Pencocokan', async () => {
   const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = (nm === 'yakin' ? 15 : 45) * DEG;
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
   LOG.info('Mulai pencocokan', { s0, scales, utara: nm, putarGambar: ROT.deg, tau: +$('inTau').value, jalanSketsa: S.roads.length, simpangSketsa: SK.junc.length });
-  $('btnMatch').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
+  $('btnMatch').disabled = true; if ($('btnMatchPersil')) $('btnMatchPersil').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
   await sleep(30);
   const t0 = performance.now();
   const adaNama = S.roads.some(r => (r.name || '').trim());
@@ -900,7 +900,7 @@ const runMatch = safe('Pencocokan', async () => {
     }
     S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
     if (POLA.on) S.cands = urutPersil(saringPola(S.cands, CTX), CTX);
-  } finally { $('btnMatch').disabled = false; }
+  } finally { $('btnMatch').disabled = false; renderPersilTombol(); }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);
   $('progTx').textContent = `Selesai dalam ${dt} dtk. ${S.cands.length} kandidat.`;
@@ -1124,7 +1124,8 @@ function init() {
   });
   $('btnJalan').onclick = ambilJalan;
   $('fileOsm').onchange = e => { if (e.target.files[0]) imporJalan(e.target.files[0]); e.target.value = ''; };
-  $('btnMatch').onclick = runMatch;
+  $('btnMatch').onclick = () => { PERSIL.pakai = false; LOG.info('Pencocokan tanpa bantuan persil'); runMatch(); };
+  $('btnMatchPersil').onclick = mulaiDenganPersil;
   $('btnCP').onclick = startCP;
   $('btnCPReset').onclick = () => { S.cps.forEach(c => c.ll = null); G.cp && G.cp.clearLayers(); S.mapMode = null; updateCpInfo(); skDraw(); LOG.info('Titik ikat di peta diulang'); };
   $('inForce').onchange = renderResult; $('inOpa').oninput = cmpDraw;
