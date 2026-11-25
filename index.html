@@ -348,7 +348,8 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
   <div class="panel" data-panel="3">
     <header><h2>Cocokkan dengan peta</h2><p class="lead">Mencari tempat di kelurahan yang pola jalannya sama dengan gambar.</p></header>
     <div class="card" id="readyInfo"></div>
-    <button class="btn pri" id="btnMatch" style="width:100%;height:40px;margin-top:6px">Mulai pencocokan</button>
+    <div class="row" style="margin-top:6px"><button class="btn pri" id="btnMatch" style="flex:1;height:40px">Mulai pencocokan</button><button class="btn" id="btnMatchPersil" style="flex:1;height:40px" title="Pakai data persil: area di sekitar SU bernomor berdekatan, tidak menimpa bidang persil, utamakan yang menempel bidang tetangga">Dengan bantuan persil</button></div>
+    <p class="hint" id="matchPersilInfo"></p>
     <div class="progress"><div id="prog"></div></div>
     <p class="hint" id="progTx"></p>
     <section class="blok" id="polaBox" hidden>
@@ -1144,7 +1145,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.14.2';
+const APP_VERSION = '2.15.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2016,7 +2017,7 @@ const runMatch = safe('Pencocokan', async () => {
   const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = (nm === 'yakin' ? 15 : 45) * DEG;
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
   LOG.info('Mulai pencocokan', { s0, scales, utara: nm, putarGambar: ROT.deg, tau: +$('inTau').value, jalanSketsa: S.roads.length, simpangSketsa: SK.junc.length });
-  $('btnMatch').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
+  $('btnMatch').disabled = true; if ($('btnMatchPersil')) $('btnMatchPersil').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
   await sleep(30);
   const t0 = performance.now();
   const adaNama = S.roads.some(r => (r.name || '').trim());
@@ -2045,7 +2046,7 @@ const runMatch = safe('Pencocokan', async () => {
     }
     S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
     if (POLA.on) S.cands = urutPersil(saringPola(S.cands, CTX), CTX);
-  } finally { $('btnMatch').disabled = false; }
+  } finally { $('btnMatch').disabled = false; renderPersilTombol(); }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);
   $('progTx').textContent = `Selesai dalam ${dt} dtk. ${S.cands.length} kandidat.`;
@@ -2269,7 +2270,8 @@ function init() {
   });
   $('btnJalan').onclick = ambilJalan;
   $('fileOsm').onchange = e => { if (e.target.files[0]) imporJalan(e.target.files[0]); e.target.value = ''; };
-  $('btnMatch').onclick = runMatch;
+  $('btnMatch').onclick = () => { PERSIL.pakai = false; LOG.info('Pencocokan tanpa bantuan persil'); runMatch(); };
+  $('btnMatchPersil').onclick = mulaiDenganPersil;
   $('btnCP').onclick = startCP;
   $('btnCPReset').onclick = () => { S.cps.forEach(c => c.ll = null); G.cp && G.cp.clearLayers(); S.mapMode = null; updateCpInfo(); skDraw(); LOG.info('Titik ikat di peta diulang'); };
   $('inForce').onchange = renderResult; $('inOpa').oninput = cmpDraw;
@@ -3427,7 +3429,7 @@ function areaPola() {
   const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value, th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun;
   if (!no || !kel) return null;
   const kode = kodeKelAktif();
-  if (PERSIL.bidang.length && kode && th) {
+  if (PERSIL.bidang.length && PERSIL.pakai !== false && kode && th) {
     const tet = PERSIL.bidang.filter(b => b.su && b.su.kode === kode && b.su.tahun === th && b.su.nomor !== no && Math.abs(b.su.nomor - no) <= POLA.maksSelisihNomor)
       .sort((a, b) => Math.abs(a.su.nomor - no) - Math.abs(b.su.nomor - no)).slice(0, PERSIL_ATUR.k);
     if (tet.length) return { lingkaran: tet.map(b => ({ lat: b.c[0], lon: b.c[1], r: PERSIL_ATUR.r })), persil: true, sumber: `data persil: sekitar SU ${tet.map(b => b.su.nomor + '/' + b.su.tahun).join(', ')}` };
@@ -3501,7 +3503,7 @@ function renderPola() {
   const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPolaSah();
   $('suketInfo').textContent = kel ? `${n} SU di ${kel} sudah tercatat ketemu (tersimpan di browser ini).` : 'Pilih kelurahan dulu di langkah 1.';
   $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran ' : ''}radius <b>${Math.round(a.lingkaran[0].r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
-  renderSUPersil();
+  renderSUPersil(); renderPersilTombol();
   try { renderReady(); } catch (e) { /* abaikan */ }
   try { gambarAreaPola(); } catch (e) { LOG.warn('Lingkaran area tidak bisa digambar di peta', e.message); }
 }
@@ -3566,7 +3568,7 @@ function bukaSetAI() {
    (2) area pencarian di sekitar SU bernomor berdekatan (kode & tahun sama);
    (3) bidang tidak boleh menimpa bidang persil; kandidat yang sisinya menempel bidang tetangga diutamakan.
    Setelan dikunci dari benchmark tuning (tests/benchmark/persil.js): k=3, r=60 m, bobot tempel 0,2. */
-const PERSIL = { bidang: [], file: [] };
+const PERSIL = { bidang: [], file: [], pakai: true }; // pakai: dipilih lewat tombol 'Mulai pencocokan' (false) / 'Dengan bantuan persil' (true)
 const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000 };
 function idb() { return new Promise((ok, no) => { const r = indexedDB.open('plotkw', 1); r.onupgradeneeded = () => r.result.createObjectStore('data'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
 async function idbSet(k, v) { const d = await idb(); return new Promise((ok, no) => { const t = d.transaction('data', 'readwrite'); t.objectStore('data').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); }
@@ -3601,6 +3603,25 @@ const muatPersil = safe('Muat data persil', async files => {
   try { await idbSet('persil', { file: PERSIL.file, bidang: PERSIL.bidang }); } catch (e) { LOG.warn('Data persil tidak bisa disimpan di browser; perlu dimuat ulang lain kali', e.message); }
   if (!POLA.on) { POLA.on = true; $('inPola').checked = true; try { localStorage.setItem('plotkw.pola', '1'); } catch (e) { /* abaikan */ } toast('Mode pola jalan diaktifkan agar data persil dipakai saat mencari.', 'ok'); }
   renderPersilInfo(); gambarPersil(); renderPola();
+});
+// tombol 'Dengan bantuan persil' aktif bila data persil ada dan nomor/tahun SU diketahui
+function renderPersilTombol() {
+  const b = $('btnMatchPersil'), el = $('matchPersilInfo'); if (!b) return;
+  const no = $('inNoSU') && $('inNoSU').value, th = ($('inThSU') && $('inThSU').value) || POLA.su.tahun, kode = kodeKelAktif();
+  const alasan = !PERSIL.bidang.length ? 'Muat file persil (.dxf) di langkah 1 untuk memakai bantuan persil.'
+    : !no || !th ? 'Isi nomor & tahun SU (Pengaturan → Mode pola jalan, terisi otomatis dari nama file SU) untuk memakai bantuan persil.'
+    : !kode ? 'Kode kelurahan ini belum dikenal di data persil; bantuan persil tidak tersedia.'
+    : !PERSIL.bidang.some(x => x.su && x.su.kode === kode) ? 'Data persil untuk kelurahan ini belum dimuat.' : '';
+  b.disabled = !!alasan; el.textContent = alasan;
+}
+const mulaiDenganPersil = safe('Pencocokan dengan bantuan persil', async () => {
+  renderPersilTombol(); if ($('btnMatchPersil').disabled) throw new Error($('matchPersilInfo').textContent);
+  PERSIL.pakai = true;
+  if (!POLA.on) { POLA.on = true; $('inPola').checked = true; try { localStorage.setItem('plotkw.pola', '1'); } catch (e) { /* abaikan */ } renderPola(); }
+  const a = areaPolaSah();
+  LOG.info('Pencocokan dengan bantuan persil', a ? { area: a.sumber } : { area: 'tidak ada SU tetangga di persil; seluruh kelurahan' });
+  if (!a || !a.persil) toast('Tidak ada SU bernomor berdekatan di data persil untuk SU ini; dicari di seluruh kelurahan.', 'warn');
+  await runMatch();
 });
 function renderPersilInfo() {
   const el = $('persilInfo'); if (!el) return;
