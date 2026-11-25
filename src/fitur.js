@@ -1359,7 +1359,7 @@ function prosesMulai(id, judul) {
 function prosesLangkah(t) { if ($('prosesTx')) $('prosesTx').textContent = `${PROSES.judul}: ${t}`; }
 function prosesSelesai() { PROSES.jalan = null; PROSES.ctl = null; AI.sibuk = false; $('prosesBar').hidden = true; renderDocs(); }
 function batalkanProses() {
-  if (!PROSES.jalan) return;
+  if (!PROSES.jalan) { $('prosesBar').hidden = true; return; }
   PROSES.batal = true; try { PROSES.ctl && PROSES.ctl.abort(); } catch (e) { /* abaikan */ }
   $('prosesTx').textContent = 'Membatalkan…'; LOG.info('Pengguna menekan Batal'); toast('Dibatalkan. Isian yang sudah terbaca tetap disimpan.', 'warn');
 }

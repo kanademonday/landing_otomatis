@@ -52,6 +52,7 @@ async def main():
     n0 = calls['n']
     await pg.click('[data-bacasaja]')
     await pg.wait_for_function("!PROSES.jalan && S.img && /hal/.test(S.img.name)", timeout=60000); await pg.wait_for_timeout(300)
+    print('Baca saja selesai: bilah proses TIDAK terlihat di layar', await pg.evaluate("getComputedStyle($('prosesBar')).display==='none'"))
     print('Baca saja: luas', await pg.evaluate("$('inLuas').value"), '| skala', await pg.evaluate("$('inSkala').value"), '| gambar', await pg.evaluate("S.img.name"), '| langkah', await pg.evaluate("STEP"),
           '| jalan/bidang ditelusuri AI:', await pg.evaluate("S.roads.length+'/'+(S.parcel?1:0)"), '| panggilan AI', calls['n'] - n0, '| alat', await pg.evaluate("SK.tool"))
     # 2) Digitasi otomatis lalu Batal saat AI sedang bekerja
@@ -61,7 +62,7 @@ async def main():
     print('saat berjalan: bilah proses tampil', await pg.evaluate("!$('prosesBar').hidden"), '|', await pg.inner_text('#prosesTx'), '| tombol kartu', await pg.evaluate("[...document.querySelectorAll('#docList .doc-h button')].map(b=>b.textContent)"))
     await pg.click('#btnBatal')
     await pg.wait_for_function("!PROSES.jalan", timeout=10000); await pg.wait_for_timeout(500)
-    print('setelah Batal: proses berhenti', await pg.evaluate("!PROSES.jalan"), '| bilah tersembunyi', await pg.evaluate("$('prosesBar').hidden"), '| error baru', await pg.evaluate("LOG.errors") - e0,
+    print('setelah Batal: proses berhenti', await pg.evaluate("!PROSES.jalan"), '| bilah TIDAK terlihat di layar', await pg.evaluate("getComputedStyle($('prosesBar')).display==='none'"), '| error baru', await pg.evaluate("LOG.errors") - e0,
           '| tombol kembali', await pg.evaluate("[...document.querySelectorAll('#docList .doc-h button')].map(b=>b.textContent)"), '| langkah', await pg.evaluate("STEP"))
     print('log:', [l for l in (await pg.evaluate("LOG.text()")).split(chr(10)) if 'dibatalkan' in l.lower() or 'Batal' in l][-3:])
     # 3) setelah batal, digitasi bisa dijalankan lagi sampai selesai

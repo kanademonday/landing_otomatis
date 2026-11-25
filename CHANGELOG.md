@@ -2,6 +2,9 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.14.1 — 2026-11-25
+- Perbaikan: bilah proses di kiri bawah tidak hilang setelah *Baca saja* / *Digitasi otomatis* selesai (gaya tampilan menimpa atribut tersembunyi). Semua elemen bertanda tersembunyi kini pasti tidak tampil; tombol di bilah juga bisa menutupnya bila tidak ada proses.
+
 ## v2.14.0 — 2026-11-25 — Tombol Batal dan Baca saja
 - **Batal**: selama *Digitasi otomatis* berjalan muncul bilah proses di kiri bawah dan tombol *Batal* di kartu berkas. Permintaan ke AI langsung dihentikan; isian yang sudah terbaca tetap disimpan; tidak dicatat sebagai error.
 - **Baca saja** (kartu berkas SU): AI hanya membaca isian (luas, skala, kelurahan), lalu halaman gambar dibuka di langkah 2 dengan alat *Jalan* aktif. Jalan dan bidang digambar sendiri, lalu *Cocokkan*. Lebih cepat (tanpa penelusuran AI dan tanpa pencocokan otomatis); bila berkas sudah pernah dibaca, langsung tanpa memanggil AI.
