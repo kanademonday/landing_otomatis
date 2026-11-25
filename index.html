@@ -187,6 +187,7 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
 .l-ERROR{color:var(--merah)}.l-WARN{color:var(--oranye)}.l-INFO{color:var(--tinta2)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:3000;display:flex;flex-direction:column-reverse;gap:6px;width:min(460px,calc(100% - 24px));pointer-events:none}
 #toast div{background:var(--putih);border:1px solid var(--garis);border-left:4px solid var(--teal);padding:9px 12px;border-radius:var(--r);box-shadow:0 6px 18px rgba(24,48,46,.12);font-size:14px}
+[hidden]{display:none!important}
 #prosesBar{position:fixed;left:16px;bottom:18px;z-index:3001;display:flex;align-items:center;gap:10px;background:var(--tinta);color:#fff;padding:8px 10px 8px 14px;border-radius:var(--r);box-shadow:0 6px 18px rgba(24,48,46,.25);font-size:14px;max-width:min(520px,calc(100% - 32px))}
 #prosesBar .btn{background:#fff;color:var(--tinta);border-color:#fff}
 #toast div.err{border-left-color:var(--merah)}#toast div.warn{border-left-color:var(--oranye)}#toast div.ok{border-left-color:var(--hijau)}
@@ -1143,7 +1144,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.14.0';
+const APP_VERSION = '2.14.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -3667,7 +3668,7 @@ function prosesMulai(id, judul) {
 function prosesLangkah(t) { if ($('prosesTx')) $('prosesTx').textContent = `${PROSES.judul}: ${t}`; }
 function prosesSelesai() { PROSES.jalan = null; PROSES.ctl = null; AI.sibuk = false; $('prosesBar').hidden = true; renderDocs(); }
 function batalkanProses() {
-  if (!PROSES.jalan) return;
+  if (!PROSES.jalan) { $('prosesBar').hidden = true; return; }
   PROSES.batal = true; try { PROSES.ctl && PROSES.ctl.abort(); } catch (e) { /* abaikan */ }
   $('prosesTx').textContent = 'Membatalkan…'; LOG.info('Pengguna menekan Batal'); toast('Dibatalkan. Isian yang sudah terbaca tetap disimpan.', 'warn');
 }
