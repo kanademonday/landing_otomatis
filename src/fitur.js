@@ -1168,7 +1168,7 @@ function confPola(i) {
   const c = S.cands, sc = c[i].r.score, gap = c[i + 1] && c[i + 1].r ? sc - c[i + 1].r.score : 1;
   if (c[i].tempel != null) { // dengan data persil (aturan dikalibrasi pada tuning persil; uji akhir Sidomulyo 19/20 benar)
     const t2 = c[i + 1] && c[i + 1].tempel != null ? c[i + 1].tempel : 0;
-    if (i === 0 && c[0].tempel >= 0.5 && t2 < 0.3 && sc >= 0.8) return [`keyakinan tinggi: ${Math.round(c[0].tempel * 100)}% sisi menempel bidang persil`, 'b-ok'];
+    if (i === 0 && c[0].tempel >= 0.5 && t2 < 0.3 && sc >= 0.8 && !(c[0].tindih > 0.2)) return [`keyakinan tinggi: ${Math.round(c[0].tempel * 100)}% sisi menempel bidang persil`, 'b-ok'];
     if (c[i].persilB) return [`bertumpuk dengan bidang persil (bentuk ${Math.round(c[i].bentuk * 100)}% mirip, luas ${Math.round(c[i].persilB.luasPoligon)} m²): validasi`, sc >= 0.65 ? 'b-mid' : 'b-low'];
     return [`perlu verifikasi: ${Math.round(c[i].tempel * 100)}% sisi menempel bidang persil`, sc >= 0.65 ? 'b-mid' : 'b-low'];
   }
@@ -1261,7 +1261,7 @@ function bukaSetAI() {
    (3) bidang tidak boleh menimpa bidang persil; kandidat yang sisinya menempel bidang tetangga diutamakan.
    Setelan dikunci dari benchmark tuning (tests/benchmark/persil.js): k=3, r=60 m, bobot tempel 0,2. */
 const PERSIL = { bidang: [], file: [], pakai: true }; // pakai: dipilih lewat tombol 'Mulai pencocokan' (false) / 'Dengan bantuan persil' (true)
-const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000, luasTol: 0.15, bentukMin: 0.8, wBentuk: 0.1 };
+const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000, luasTol: 0.15, bentukMin: 0.8, wBentuk: 0.1, wTindih: 0.6 };
 function idb() { return new Promise((ok, no) => { const r = indexedDB.open('plotkw', 1); r.onupgradeneeded = () => r.result.createObjectStore('data'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
 async function idbSet(k, v) { const d = await idb(); return new Promise((ok, no) => { const t = d.transaction('data', 'readwrite'); t.objectStore('data').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); }
 async function idbGet(k) { const d = await idb(); return new Promise((ok, no) => { const r = d.transaction('data').objectStore('data').get(k); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
@@ -1378,7 +1378,7 @@ async function kandidatBentukPersil(cands, s0, opt) {
   let n = 0, i = 0;
   for (const b of pool) {
     if (++i % 25 === 0) { cekBatal(); await sleep(0); }
-    const pw = b.ll.map(p => PROJ.fwd(p[0], p[1])), cq = CORE.centroid(pw); if (!inAreaFn(cq[0], cq[1])) continue;
+    const pw = b.ll.map(p => PROJ.fwd(p[0], p[1])), cq = CORE.centroid(pw); if (!(dalamKelFn || inAreaFn)(cq[0], cq[1])) continue;
     const mb = miripBentuk(skM, pw, thTol); if (mb.s < PERSIL_ATUR.bentukMin) continue;
     const T = { s: s0 * mb.k, th: mb.a, tx: 0, ty: 0 }, p0 = CORE.fwdT(T, cA[0], cA[1]); T.tx = cq[0] - p0[0]; T.ty = cq[1] - p0[1];
     const lama = cands.find(u => { const q = CORE.fwdT(u.T, pc[0], pc[1]), p = CORE.fwdT(T, pc[0], pc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 5; });
@@ -1416,11 +1416,24 @@ function tempelPersil(T, ctx, ref) {
   }
   return n ? ok / n : 0;
 }
+// tumpang tindih dengan bidang persil lain, KECUALI satu bidang yang bertumpuk pas (≥70% dua arah):
+// bidang yang sudah tergambar di persil tidak dihukum, posisi yang menabrak beberapa bidang dihukum
+function tindihPersil(T, ctx, ref) {
+  const bbOf = P => [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1]))];
+  const pm = ctx.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), sm = CORE.interiorSamples(pm, 30), c0 = CORE.centroid(pm), Pb = { pts: pm, bb: bbOf(pm) };
+  const dk = ref.filter(pp => Math.hypot(pp[0][0] - c0[0], pp[0][1] - c0[1]) < 120).map(pts => ({ pts, bb: bbOf(pts) }));
+  const pas = dk.find(r => CORE.overlapFrac(sm, [r]) >= 0.7 && CORE.overlapFrac(CORE.interiorSamples(r.pts, 30), [Pb]) >= 0.7);
+  return CORE.overlapFrac(sm, dk.filter(r => r !== pas));
+}
 function urutPersil(cands, ctx) {
   const ref = polaRef(); if (!ref || !ref.length || !ctx) return cands;
-  const nilai = k => k.r.score + PERSIL_ATUR.wTempel * k.tempel + PERSIL_ATUR.wBentuk * (k.bentuk || 0);
-  const o = cands.map(k => ({ ...k, tempel: tempelPersil(k.T, ctx, ref) })).sort((a, b) => nilai(b) - nilai(a));
-  LOG.info('Kandidat diurutkan ulang dengan data persil (jalan + sisi menempel + bentuk & luas)', o.map(k => ({ skor: +k.r.score.toFixed(3), tempel: +k.tempel.toFixed(2), bentuk: k.bentuk ? +k.bentuk.toFixed(2) : 0 })));
+  // hanya kandidat yang pusatnya di DALAM batas kelurahan (data persil per kelurahan)
+  const pc = ctx.parcelC, dlm = cands.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return !dalamKelFn || dalamKelFn(p[0], p[1]); });
+  if (dlm.length < cands.length) LOG.info(`Bantuan persil: ${cands.length - dlm.length} kandidat di luar batas kelurahan dibuang`);
+  if (dlm.length) cands = dlm;
+  const nilai = k => k.r.score + PERSIL_ATUR.wTempel * k.tempel + PERSIL_ATUR.wBentuk * (k.bentuk || 0) - PERSIL_ATUR.wTindih * k.tindih;
+  const o = cands.map(k => ({ ...k, tempel: tempelPersil(k.T, ctx, ref), tindih: tindihPersil(k.T, ctx, ref) })).sort((a, b) => nilai(b) - nilai(a));
+  LOG.info('Kandidat diurutkan ulang dengan data persil (jalan + sisi menempel + bentuk & luas − menabrak bidang lain)', o.map(k => ({ skor: +k.r.score.toFixed(3), tempel: +k.tempel.toFixed(2), bentuk: k.bentuk ? +k.bentuk.toFixed(2) : 0, tindih: +k.tindih.toFixed(2) })));
   return o.map((k, i) => ({ ...k, label: '#' + (i + 1) }));
 }
 // SU yang sedang dicari sudah ada di data persil?

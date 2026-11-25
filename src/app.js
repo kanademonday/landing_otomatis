@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.18.0';
+const APP_VERSION = '2.18.1';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -104,7 +104,7 @@ const S = {
   cands: [], sel: -1, T: null,
   aiBackup: null, mapMode: null, cpIdx: 0
 };
-let PROJ = null, CTX = null, imgEl = null, inAreaFn = null;
+let PROJ = null, CTX = null, imgEl = null, inAreaFn = null, dalamKelFn = null;
 function stateSummary() {
   const o = {
     input: { kota: $('inKota')?.value, kec: $('inKec')?.value, kel: $('inKel')?.value, luas: $('inLuas')?.value, utara: $('inNorthMode')?.value, putarGambar: typeof ROT !== 'undefined' ? ROT.deg : 0, adjBidang: S.adj },
@@ -372,6 +372,7 @@ function setProj() {
   const b = wilBBox(); S.proj0 = { lat0: (b.s + b.n) / 2, lon0: (b.w + b.e) / 2 };
   PROJ = CORE.makeProj(S.proj0.lat0, S.proj0.lon0);
   const ringsXY = S.wil.rings.map(r => r.map(p => PROJ.fwd(p[0], p[1])));
+  dalamKelFn = (x, y) => ringsXY.some(r => CORE.pointInRing(x, y, r)); // tepat di dalam batas kelurahan (tanpa kelonggaran 150 m)
   inAreaFn = (x, y) => {
     for (const r of ringsXY) if (CORE.pointInRing(x, y, r)) return true;
     for (const r of ringsXY) if (CORE.plNearest(r.concat([r[0]]), [x, y]).d < 150) return true;
@@ -840,7 +841,7 @@ function buildCtx(s0, tanpaNama) {
   const t0 = performance.now();
   const ctx = CORE.prepareCtx({
     ways: S.osm.ways, nodeXY, roadsImg: tanpaNama ? S.roads.map(r => ({ ...r, name: '' })) : S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
-    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: polaInArea() || inAreaFn, refXY: polaRef(), wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
+    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: polaInArea() || inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
     log: (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m)
   });
   LOG.info(`Konteks pencocokan siap (${Math.round(performance.now() - t0)} ms)`);

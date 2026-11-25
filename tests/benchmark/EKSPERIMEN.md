@@ -86,3 +86,17 @@ Tuning (Pelita, Selili, Sidodamai, Sungai Dama; 160 kasus, top-1):
 | 0,4 | 133 | 67 |
 Uji akhir Sidomulyo (40 kasus, sekali jalan): v5 21 → v6 34 bila bidang ada di persil; 19 bila belum ada (v5 21).
 Label: penempatan label ke poligon kini memakai kecocokan luas label (rasio 0,6–1,7); blok/jalan besar tidak lagi "mengambil" NIB.
+
+## v8 — perbaikan kesalahan uji v5/v6 (v2.18.1)
+Temuan: uji v5/v6 selalu MEMBUANG bidang target dari acuan persil, padahal di lapangan SU yang dicari biasanya SUDAH tergambar di persil.
+Dengan acuan realistis (--nyata 1, target ikut di persil), penalti tumpang tindih menghukum lokasi yang benar sehingga hasil lari ke tempat kosong/luar kelurahan:
+v6 realistis top-1 5/160 (tuning), 1/40 (Sidomulyo).
+v8: pencarian tanpa penalti tumpang tindih; kandidat hanya di dalam batas kelurahan; urutan = skor jalan + 0,2×tempel + 0,1×bentuk − 0,6×tindih
+(tindih = tumpang tindih dengan bidang persil lain, kecuali satu bidang yang bertumpuk pas ≥70% dua arah).
+| | bidang sudah di persil | bidang belum di persil |
+|---|---|---|
+| v6 (tuning, realistis) | 5/160 | – |
+| v7 tanpa tindih | 138/160 | 59/160 |
+| **v8 wTindih 0,6** | **136/160** | **68/160** |
+| v8 wTindih 0,3 / 1,0 | 136 / 134 | 66 / 64 |
+Uji akhir Sidomulyo (sekali jalan): v6 1/40 → v8 31/40 bila sudah di persil; 12/40 bila belum (v5 dulu 21/40 dengan uji yang tidak realistis).
