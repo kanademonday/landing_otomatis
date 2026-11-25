@@ -115,6 +115,62 @@ const CORE = (() => {
     flush();
     return out;
   }
+  // Data persil (DXF dari AutoCAD): poligon bidang + teks label (NIB 5 angka, nomor hak, SU.<kode8><nomor5>/<tahun>, "Luas: N m²").
+  // Teks dikelompokkan ke poligon terkecil yang memuatnya. Koordinat dibiarkan dalam sistem file (mis. TM-3 zona 50.2).
+  function dxfPersil(txt) {
+    const lines = txt.split(/\r?\n/), polys = [], texts = [];
+    let cur = null, typ = null;
+    const tutup = () => {
+      if (typ === 'LW' && cur && cur.pts.length >= 3) polys.push(cur.pts);
+      if (typ === 'TX' && cur && cur.t) texts.push(cur.has11 ? { t: cur.t, x: cur.x1, y: cur.y1 } : { t: cur.t, x: cur.x, y: cur.y });
+      cur = null; typ = null;
+    };
+    for (let i = 0; i + 1 < lines.length; i += 2) {
+      const c = lines[i].trim(), v = lines[i + 1].replace(/\r$/, '');
+      if (c === '0') { tutup(); if (v === 'LWPOLYLINE') { typ = 'LW'; cur = { pts: [] }; } else if (v === 'TEXT' || v === 'MTEXT') { typ = 'TX'; cur = { t: '', x: 0, y: 0 }; } continue; }
+      if (!cur) continue;
+      if (typ === 'LW') { if (c === '10') cur.pts.push([parseFloat(v), 0]); else if (c === '20' && cur.pts.length) cur.pts[cur.pts.length - 1][1] = parseFloat(v); }
+      else if (typ === 'TX') {
+        if (c === '1' || c === '3') cur.t += v; else if (c === '10') cur.x = parseFloat(v); else if (c === '20') cur.y = parseFloat(v);
+        else if (c === '11') { cur.x1 = parseFloat(v); cur.has11 = true; } else if (c === '21') cur.y1 = parseFloat(v);
+      }
+    }
+    tutup();
+    const bid = polys.map(pts => {
+      if (pts.length > 3 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < 1e-6) pts = pts.slice(0, -1);
+      let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of pts) { a = Math.min(a, p[0]); b = Math.min(b, p[1]); c = Math.max(c, p[0]); d = Math.max(d, p[1]); }
+      return { pts, bb: [a, b, c, d], luasPoligon: polyArea(pts), nib: null, hak: null, su: null, luas: null };
+    });
+    // indeks kisi agar cepat
+    const cell = 50, grid = new Map(), key = (i, j) => i + ',' + j;
+    bid.forEach((p, k) => { for (let i = Math.floor(p.bb[0] / cell); i <= Math.floor(p.bb[2] / cell); i++) for (let j = Math.floor(p.bb[1] / cell); j <= Math.floor(p.bb[3] / cell); j++) { const q = key(i, j); (grid.get(q) || grid.set(q, []).get(q)).push(k); } });
+    // label bertumpuk (NIB, hak, SU, luas) berbagi x yang sama → satukan dulu, lalu letakkan di poligon yang memuat titik tengahnya
+    const tumpuk = new Map();
+    for (const t of texts) {
+      const s0 = t.t.replace(/\\[A-Za-z][^;]*;|[{}]/g, '').trim(); if (!s0) continue;
+      const kx = Math.round(t.x * 1000); let g = tumpuk.get(kx);
+      if (!g) tumpuk.set(kx, g = []);
+      let grp = g.find(q => Math.abs(q.y0 - t.y) < 8);
+      if (!grp) g.push(grp = { y0: t.y, x: t.x, isi: [] });
+      grp.isi.push({ s: s0, y: t.y });
+    }
+    const cari = (x, y) => { const c = (grid.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []).filter(k => { const p = bid[k]; return x >= p.bb[0] && x <= p.bb[2] && y >= p.bb[1] && y <= p.bb[3] && pointInRing(x, y, p.pts); }); return c.length ? c.reduce((m, k) => bid[k].luasPoligon < bid[m].luasPoligon ? k : m) : -1; };
+    let lepas = 0;
+    for (const g of tumpuk.values()) for (const grp of g) {
+      const ym = grp.isi.reduce((a, q) => a + q.y, 0) / grp.isi.length;
+      let k = cari(grp.x, ym); if (k < 0) for (const q of grp.isi) { k = cari(grp.x, q.y); if (k >= 0) break; }
+      if (k < 0) { lepas += grp.isi.length; continue; }
+      const p = bid[k];
+      for (const { s: s0 } of grp.isi) {
+        let m;
+        if ((m = s0.match(/^SU\.?\s*(\d{8})(\d{5})\s*\/\s*(\d{4})/i))) p.su = { kode: m[1], nomor: +m[2], tahun: +m[3], teks: s0 };
+        else if (/^\d{5}$/.test(s0)) p.nib = s0;
+        else if ((m = s0.match(/^Luas\s*:?\s*([\d.,]+)/i))) p.luas = +m[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.');
+        else if (/^(M|HGB|HP|HPL|HW|W|HGU)\.\s*\d+/i.test(s0)) p.hak = s0.replace(/\s+/g, '');
+      }
+    }
+    return { bidang: bid, teks: texts.length, teksLepas: lepas };
+  }
   // Titik sampel di dalam poligon (untuk hitung tumpang tindih)
   function interiorSamples(poly, n) {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -605,6 +661,6 @@ const CORE = (() => {
 
   return { prepareCtx, fromTM, CRS, crsFwd, crsInv, dxfR12, dxfPolylines, interiorSamples, overlapFrac, DEG, BIG, makeProj, toUTM, toTM3, normAng, normName, nameMatch, plLen, plPointAt, plNearest, polyArea, centroid,
     pointInRing, sketchJunctions, buildGraph, osmJunctions, buildField, look, samplePolys, buildBuckets,
-    fwdT, invT, similarity2D, score, refine, matchAll };
+    fwdT, invT, similarity2D, score, refine, matchAll, dxfPersil };
 })();
 if (typeof module !== 'undefined') module.exports = CORE;

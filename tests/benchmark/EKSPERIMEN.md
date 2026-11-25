@@ -44,3 +44,26 @@ rinciannya tercatat di bawah agar bisa dibuat ulang.
 - 03754: simpang OSM yang cocok (T, 3 cabang) ada 0 m dari tebakan; skor terbaik di sana 0,795 (fwd 0,25 karena lanjutan jalan ke timur laut pada gambar tidak ada di OSM) vs 0,916 di tempat salah.
 - 03753: simpang 20 m dari titik; skor 0,933 (rev 0,22: jalan OSM di sekitar yang tidak digambar) vs 0,989 di tempat salah.
 - Penyebab: OSM tidak sama dengan keadaan 1998 dan SU hanya menggambar sebagian jalan. Mengendurkan kedua penalti (M5) justru membuat tempat salah lebih mudah cocok.
+
+# Data persil (2026-11-25)
+
+`node tests/benchmark/persil.js --varian v0|v1|v2 --r 60 [--final 1] --kel <kelurahan> --n 40` (DXF di `real/persil/`, di-.gitignore).
+Kasus = bidang persil ber-SU (tahun ≤2009) yang sudah berlokasi, diperlakukan seolah belum dilanding; sketsa = bidang itu + jalan OSM ≤12 m (gaya SU asli), tanpa nama.
+Tuning: Pelita, Selili, Sidodamai, Sungai Dama (4 × 40). Uji akhir: Sidomulyo (60) + 15 SU nyata.
+
+Temuan data: SU dengan nomor terdekat (kode & tahun sama) median 50–230 m jauhnya; dari 3 nomor terdekat, yang terdekat median 15–117 m (1990–1999: 32 m, 60% ≤50 m).
+Jadi area = gabungan lingkaran di sekitar tiap tetangga, bukan rata-ratanya. Poligon persil besar tanpa label (blok/batas, mis. 33 ha) harus dibuang dari acuan tumpang tindih (sebelum dibuang: posisi benar 100% tumpang tindih).
+
+| varian (tuning, n=160) | top1 | top3 | top6 | "keyakinan tinggi" benar |
+|---|---|---|---|---|
+| v0 seluruh kelurahan | 31% | 39% | 45% | 16/16 |
+| v1 lingkaran 60 m | 40% | 48% | 48% | 47/82 (label lama) |
+| v1 lingkaran 100 m | 36% | 46% | 48% | 28/56 |
+| v2 + tak boleh menimpa persil, 60 m | 43% | 48% | 48% | 62/88 (label lama) |
+| v2 + urut ulang skor+0,2×tempel | 47% | – | – | aturan tempel: 50/52 (96%) |
+
+Sisi menempel (porsi keliling ≤1,5 m dari tepi persil lain): #1 benar median 0,69; #1 salah median 0,00.
+Aturan terkunci: k=3, r=60 m, skor+0,2×tempel, "keyakinan tinggi" bila tempel#1≥0,5 & tempel#2<0,3 & skor≥0,8.
+
+Uji akhir Sidomulyo (n=60, tidak dipakai menyetel): v0 top1 28% / top6 38%, "tinggi" 5/5 → **final top1 58% / top6 58%, "tinggi" 19/20 (cakupan 33%)**.
+15 SU nyata (≤25 m): baseline 0/15 → final top1 2/15, top6 3/15; "keyakinan tinggi" 1 kasus, benar.

@@ -30,6 +30,9 @@ Langkah 2 → *Pengaturan baca otomatis (AI)*:
 
 Lalu klik *Baca otomatis* pada berkas, periksa hasilnya, *Isi ke formulir*, buka halaman gambar, dan *Telusuri gambar otomatis*. Semua hasil AI harus diperiksa, terutama tulisan tangan.
 
+### Data persil (DXF)
+Langkah 1 → *Muat file persil (.dxf)*. Dari AutoCAD: **Save As → AutoCAD DXF** (DWG tidak bisa dibaca di browser). Setelah dimuat: SU yang sudah ada di persil langsung ketemu (salin koordinat persisnya ke AutoCAD), dan SU lain dicari di sekitar SU bernomor berdekatan, tanpa menimpa bidang persil, dengan mengutamakan posisi yang menempel bidang tetangga. Data hanya tersimpan di browser masing-masing.
+
 ### Mode pola jalan (eksperimen)
 Untuk gambar SU lama yang hanya berisi satu garis jalan tanpa nama/simpang. Langkah 3 → *Pengaturan lanjutan* → centang **Mode pola jalan (eksperimen)**. Lalu persempit pencarian dengan **titik perkiraan** (geser peta ke perkiraan lokasi dari peta analog → *Pakai tengah peta*) atau dengan **SU yang sudah ketemu** (tempel daftar `X = … Y = … su.02743` dari AutoCAD, atau klik *Tandai SU ini sudah ketemu* di langkah 4). SU bernomor berdekatan dicari di sekitar SU tetangganya. Gambar minim tidak pernah diberi label "keyakinan tinggi": selalu periksa beberapa kandidat dengan citra satelit dan peta analog.
 
@@ -72,6 +75,7 @@ python3 tests/e2e/run5.py        # uji nama jalan benar vs keliru (nama sebagai 
 python3 tests/e2e/run7.py        # uji baca otomatis AI (Groq & Ollama tiruan), terbilang, batas pemakaian
 python3 tests/e2e/run6.py        # uji buka PDF SU, kode wilayah, penampil, cek skala (SAMPEL=folder untuk PDF asli, tidak disimpan)
 python3 tests/e2e/run9.py        # uji mode pola jalan (mati = identik, impor SU ketemu, area, label)
+python3 tests/e2e/run10.py       # uji data persil DXF (SU persis, area, tempel, salin koordinat persil)
 node tests/benchmark/run.js      # benchmark akurasi offline (lihat tests/benchmark/README.md)
 ```
 

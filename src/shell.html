@@ -243,6 +243,14 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
     <label class="cek"><input type="checkbox" id="inFoot" checked> Ikutkan gang dan jalan setapak</label>
 
     <section class="blok">
+      <h3>Data persil (opsional)</h3>
+      <p class="hint">File DXF persil dari AutoCAD (Save As → AutoCAD DXF; satu file per kelurahan boleh). Dipakai untuk menemukan SU yang sudah ada, mempersempit pencarian ke sekitar SU bernomor berdekatan, dan mengutamakan posisi yang menempel bidang tetangga. Hanya diproses dan disimpan di browser ini.</p>
+      <label class="btn" style="margin:0">Muat file persil (.dxf)…<input type="file" id="filePersil" accept=".dxf" multiple hidden></label>
+      <p class="hint" id="persilInfo">Belum ada data persil.</p>
+      <button class="btn nf" id="btnPersilHapus" hidden>Hapus data persil dari browser</button>
+    </section>
+
+    <section class="blok">
       <h3>Cadangan bila data tidak tersedia</h3>
       <details><summary>Cari batas wilayah lewat internet</summary>
         <button class="btn" id="btnCari">Cari batas kelurahan terpilih</button>
@@ -343,7 +351,9 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
     <section class="blok" id="polaBox" hidden>
       <h3>Perkiraan lokasi (mode pola jalan)</h3>
       <p class="hint">Gambar dengan satu garis jalan cocok di banyak tempat. Persempit pencarian dengan titik perkiraan dari peta analog, atau dengan SU bernomor berdekatan yang sudah ketemu.</p>
-      <label for="inNoSU">Nomor SU yang sedang dicari</label><input type="number" id="inNoSU" placeholder="mis. 3770 (terisi otomatis dari nama file)">
+      <div class="row"><div><label for="inNoSU">Nomor SU</label><input type="number" id="inNoSU" placeholder="mis. 3770"></div><div><label for="inThSU">Tahun SU</label><input type="number" id="inThSU" placeholder="mis. 1998"></div></div>
+      <p class="hint">Terisi otomatis dari nama file SU.</p>
+      <div class="card" id="suPersil" hidden></div>
       <p class="hint" id="polaArea"></p>
       <div class="row"><button class="btn" id="btnTitikPeta">Pakai tengah peta sebagai titik perkiraan</button><button class="btn nf" id="btnTitikHapus">Hapus titik</button></div>
       <label for="inPolaR">Radius titik perkiraan (m)</label><input type="number" id="inPolaR" value="150">

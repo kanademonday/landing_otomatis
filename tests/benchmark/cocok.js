@@ -8,7 +8,7 @@ async function cocokkan(Wl, K) {
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
   if (pola) opt.pola = pola;
   const build = tanpaNama => CORE.prepareCtx({ ways: Wl.osm.ways, nodeXY: Wl.nodeXY, roadsImg: tanpaNama ? K.roads.map(r => ({ ...r, name: '' })) : K.roads, parcelImg: K.parcel, imgW: K.imgW, imgH: K.imgH,
-    s0, tau: Math.max(2, CFG.tau), inArea: Wl.inArea, wRev: Math.min(0.6, Math.max(0, CFG.wRev)), log: () => {}, ...(pola ? { pola } : {}) });
+    s0, tau: Math.max(2, CFG.tau), inArea: Wl.inArea, ...(Wl.refXY ? { refXY: Wl.refXY } : {}), wRev: Math.min(0.6, Math.max(0, CFG.wRev)), log: () => {}, ...(pola ? { pola } : {}) });
   const adaNama = K.roads.some(r => (r.name || '').trim());
   const CTX = build(true);
   const out = await CORE.matchAll(CTX, opt, null, () => {});

@@ -232,8 +232,9 @@ function poligonAcad() {
   for (const ex of S.extra) polys.push(toXY(ex.pts.map(p => CORE.fwdT(S.T, p[0], -p[1]))));
   return polys;
 }
-function perintahAcad() {
-  const polys = poligonAcad(), f = v => v.toFixed(4);
+function perintahAcad() { return perintahDariXY(poligonAcad()); }
+function perintahDariXY(polys) {
+  const f = v => v.toFixed(4);
   if ($('inAcadFmt').value === 'teks') // AutoCAD LT: satu baris, spasi = Enter
     return polys.map(P => '_.PLINE ' + P.map(q => `_non ${f(q[0])},${f(q[1])}`).join(' ') + ' _C').join(' ');
   const L0 = polys.map(P => '(' + P.map(q => `(${f(q[0])} ${f(q[1])} 0.0)`).join(' ') + ')').join(' ');
@@ -264,7 +265,7 @@ async function muatPdfjs() {
 }
 // Kode wilayah pada nama file: 16 01 KK LL (prov, kota, kecamatan, kelurahan)
 const KODE_KEC = { '01': 'Palaran', '02': 'Samarinda Seberang', '03': 'Samarinda Ulu', '04': 'Samarinda Ilir', '05': 'Samarinda Utara', '06': 'Sungai Kunjang', '07': 'Sambutan', '08': 'Sungai Pinang', '09': 'Samarinda Kota', '10': 'Loa Janan Ilir' };
-const KODE_KEL = { '16010401': ['Samarinda Ilir', 'Selili'], '16010403': ['Samarinda Ilir', 'Sidomulyo'] };   // diketahui pasti
+const KODE_KEL = { '16010401': ['Samarinda Ilir', 'Selili'], '16010402': ['Samarinda Ilir', 'Sungai Dama'], '16010403': ['Samarinda Ilir', 'Sidomulyo'], '16010404': ['Samarinda Ilir', 'Sidodamai'], '16010405': ['Samarinda Ilir', 'Pelita'] }; // dari data persil   // diketahui pasti
 try { Object.assign(KODE_KEL, JSON.parse(localStorage.getItem('plotkw.kode') || '{}')); } catch (e) { /* abaikan */ }
 function bacaNamaFile(n) {
   const nm = n.replace(/\.[^.]+$/, '');
@@ -363,7 +364,7 @@ const pakaiHalaman = safe('Pakai halaman', async () => {
     const r = await renderHalaman(d.pdf, VW.pg, null, 200);
     $('viewer').hidden = true;
     setImage(r.url, `${d.info.label} hal ${VW.pg}`, false, false, { dpi: r.dpi });
-    if (d.info.jenis === 'SU' && d.info.nomor) setNomorSU(d.info.nomor);
+    if (d.info.jenis === 'SU' && d.info.nomor) setNomorSU(d.info.nomor, d.info.kode, d.info.tahun);
     if (d.info.jenis === 'SU' && !$('inSkala').value) $('inSkala').value = 500;
     LOG.info(`Halaman ${VW.pg} dari ${d.info.jenis} dipakai sebagai gambar situasi`, { dpi: +r.dpi.toFixed(1), w: r.w, h: r.h });
     toast('Gambar siap. Periksa skala (biasanya 1:500), putar agar utara di atas, lalu telusuri jalan dan bidang.', 'ok');
@@ -1076,35 +1077,48 @@ function sederhanakan(P, tol) {
    1) mempersempit pencarian ke titik perkiraan (dari peta analog) atau ke sekitar SU bernomor berdekatan yang sudah ketemu;
    2) memberi label jujur: gambar minim tidak pernah "keyakinan tinggi"; beberapa lokasi serupa = "ambigu".
    Saat mati: tidak ada yang berubah (polaInArea() = null, conf() lama). */
-const POLA = { on: false, rBawaan: 150, kTetangga: 3, maksSelisihNomor: 300, epsSerupa: 0.03, titik: null };
+const POLA = { on: false, rBawaan: 150, kTetangga: 3, maksSelisihNomor: 300, epsSerupa: 0.03, titik: null, su: { kode: null, tahun: null } };
 const SUKET = (() => { try { return JSON.parse(localStorage.getItem('plotkw.suket') || '{}'); } catch (e) { return {}; } })();
 const kunciSU = (kel, no) => kel + '#' + (+no);
 function simpanSuket() { try { localStorage.setItem('plotkw.suket', JSON.stringify(SUKET)); } catch (e) { /* abaikan */ } }
-function setNomorSU(no) { if ($('inNoSU')) { $('inNoSU').value = +no; renderPola(); } }
+function setNomorSU(no, kode, tahun) {
+  if (kode) POLA.su.kode = kode; if (tahun) POLA.su.tahun = +tahun;
+  if ($('inNoSU')) { $('inNoSU').value = +no; if ($('inThSU') && tahun) $('inThSU').value = +tahun; renderPola(); }
+}
+function kodeKelAktif() { if (POLA.su.kode) return POLA.su.kode; const kel = $('inKel').value; for (const k in KODE_KEL) if (KODE_KEL[k][1] === kel) return k; return null; }
+// Area pencarian = satu atau beberapa lingkaran. Urutan: titik perkiraan → SU tetangga di data persil → SU yang sudah ditandai ketemu.
 function areaPola() {
   if (!POLA.on) return null;
-  if (POLA.titik) return { lat: POLA.titik.lat, lon: POLA.titik.lon, r: POLA.titik.r, sumber: 'titik perkiraan dari peta' };
-  const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value;
+  if (POLA.titik) return { lingkaran: [{ lat: POLA.titik.lat, lon: POLA.titik.lon, r: POLA.titik.r }], sumber: 'titik perkiraan dari peta' };
+  const no = +($('inNoSU') && $('inNoSU').value), kel = $('inKel').value, th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun;
   if (!no || !kel) return null;
+  const kode = kodeKelAktif();
+  if (PERSIL.bidang.length && kode && th) {
+    const tet = PERSIL.bidang.filter(b => b.su && b.su.kode === kode && b.su.tahun === th && b.su.nomor !== no && Math.abs(b.su.nomor - no) <= POLA.maksSelisihNomor)
+      .sort((a, b) => Math.abs(a.su.nomor - no) - Math.abs(b.su.nomor - no)).slice(0, PERSIL_ATUR.k);
+    if (tet.length) return { lingkaran: tet.map(b => ({ lat: b.c[0], lon: b.c[1], r: PERSIL_ATUR.r })), persil: true, sumber: `data persil: sekitar SU ${tet.map(b => b.su.nomor + '/' + b.su.tahun).join(', ')}` };
+  }
   const tet = Object.values(SUKET).filter(x => x.kel === kel && x.nomor !== no && Math.abs(x.nomor - no) <= POLA.maksSelisihNomor)
     .sort((a, b) => Math.abs(a.nomor - no) - Math.abs(b.nomor - no)).slice(0, POLA.kTetangga);
   if (!tet.length) return null;
   const lat = tet.reduce((a, x) => a + x.lat, 0) / tet.length, lon = tet.reduce((a, x) => a + x.lon, 0) / tet.length;
   const m = 111320, sebar = Math.max(0, ...tet.map(x => Math.hypot((x.lat - lat) * m, (x.lon - lon) * m * Math.cos(lat * DEG))));
-  return { lat, lon, r: Math.max(POLA.rBawaan, 1.5 * sebar), sumber: `${tet.length} SU tetangga yang sudah ketemu (no. ${tet.map(x => x.nomor).join(', ')})` };
+  return { lingkaran: [{ lat, lon, r: Math.max(POLA.rBawaan, 1.5 * sebar) }], sumber: `${tet.length} SU tetangga yang sudah ketemu (no. ${tet.map(x => x.nomor).join(', ')})` };
 }
+function lingkaranXY(a) { return a.lingkaran.map(L0 => { const c = PROJ.fwd(L0.lat, L0.lon); return { x: c[0], y: c[1], r: L0.r }; }); }
+function dalamArea(cs, x, y, ex) { return cs.some(c => Math.hypot(x - c.x, y - c.y) < c.r + ex); }
 // Simpang/ruas jangkar boleh sampai 100 m di luar lingkaran (simpang sketsa bisa jauh dari bidang);
-// kandidat akhir disaring: pusat bidang harus di dalam lingkaran (saringPola).
+// kandidat akhir disaring: pusat bidang harus di dalam salah satu lingkaran (saringPola).
 const POLA_JANGKAR_EKSTRA = 100;
 function polaInArea() {
   const a = areaPola(); if (!a || !PROJ) return null;
-  const c = PROJ.fwd(a.lat, a.lon);
-  return (x, y) => Math.hypot(x - c[0], y - c[1]) < a.r + POLA_JANGKAR_EKSTRA;
+  const cs = lingkaranXY(a);
+  return (x, y) => dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA);
 }
 function saringPola(cands, ctx) {
   const a = areaPola(); if (!a || !PROJ || !ctx) return cands;
-  const c = PROJ.fwd(a.lat, a.lon), pc = ctx.parcelC;
-  const out = cands.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return Math.hypot(p[0] - c[0], p[1] - c[1]) <= a.r; });
+  const cs = lingkaranXY(a), pc = ctx.parcelC;
+  const out = cands.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return dalamArea(cs, p[0], p[1], 0); });
   if (out.length < cands.length) LOG.info(`Mode pola: ${cands.length - out.length} kandidat di luar area perkiraan dibuang`);
   if (!out.length) { LOG.warn('Mode pola: tidak ada kandidat di dalam area perkiraan; ditampilkan kandidat terdekat apa adanya'); toast('Tidak ada kandidat di dalam area perkiraan. Periksa titik/radius, atau gambar jalannya.', 'warn'); return cands; }
   return out.map((k, i) => ({ ...k, label: '#' + (i + 1) }));
@@ -1112,11 +1126,16 @@ function saringPola(cands, ctx) {
 function infoPola() {
   if (!POLA.on) return '';
   const a = areaPola();
-  return a ? `<li class="qc-ok">Mode pola: pencarian dipersempit ke radius ${Math.round(a.r)} m (${esc(a.sumber)})</li>`
-    : '<li class="qc-info">Mode pola aktif, tetapi belum ada titik perkiraan atau SU tetangga yang sudah ketemu: dicari di seluruh kelurahan.</li>';
+  return a ? `<li class="qc-ok">Mode pola: pencarian dipersempit ke ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran' : 'lingkaran'} radius ${Math.round(a.lingkaran[0].r)} m (${esc(a.sumber)})</li>`
+    : '<li class="qc-info">Mode pola aktif, tetapi belum ada titik perkiraan, data persil yang cocok, atau SU tetangga yang sudah ketemu: dicari di seluruh kelurahan.</li>';
 }
 function confPola(i) {
   const c = S.cands, sc = c[i].r.score, gap = c[i + 1] && c[i + 1].r ? sc - c[i + 1].r.score : 1;
+  if (c[i].tempel != null) { // dengan data persil (aturan dikalibrasi pada tuning persil; uji akhir Sidomulyo 19/20 benar)
+    const t2 = c[i + 1] && c[i + 1].tempel != null ? c[i + 1].tempel : 0;
+    if (i === 0 && c[0].tempel >= 0.5 && t2 < 0.3 && sc >= 0.8) return [`keyakinan tinggi: ${Math.round(c[0].tempel * 100)}% sisi menempel bidang persil`, 'b-ok'];
+    return [`perlu verifikasi: ${Math.round(c[i].tempel * 100)}% sisi menempel bidang persil`, sc >= 0.65 ? 'b-mid' : 'b-low'];
+  }
   if (i === 0) {
     if (!SK.junc.length && S.roads.length <= 2) return ['perlu verifikasi: gambar minim (tanpa simpang)', 'b-mid'];
     if (sc >= 0.8 && gap > 0.06) return ['keyakinan tinggi', 'b-ok'];
@@ -1131,14 +1150,15 @@ function gambarAreaPola() {
   if (!G.pola) G.pola = L.layerGroup().addTo(map);
   G.pola.clearLayers();
   const a = areaPola();
-  if (a) L.circle([a.lat, a.lon], { radius: a.r, color: '#1F5E5B', weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(G.pola);
+  if (a) for (const L0 of a.lingkaran) L.circle([L0.lat, L0.lon], { radius: L0.r, color: '#1F5E5B', weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(G.pola);
 }
 function renderPola() {
   if (!$('polaBox')) return;
   $('polaBox').hidden = !POLA.on; if ($('btnTandaKetemu')) $('btnTandaKetemu').hidden = !POLA.on;
   const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPola();
   $('suketInfo').textContent = kel ? `${n} SU di ${kel} sudah tercatat ketemu (tersimpan di browser ini).` : 'Pilih kelurahan dulu di langkah 1.';
-  $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: radius <b>${Math.round(a.r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
+  $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran ' : ''}radius <b>${Math.round(a.lingkaran[0].r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
+  renderSUPersil();
   try { renderReady(); } catch (e) { /* abaikan */ }
   try { gambarAreaPola(); } catch (e) { LOG.warn('Lingkaran area tidak bisa digambar di peta', e.message); }
 }
@@ -1165,14 +1185,14 @@ function eksporSuket() {
   const t = 'nomor_su,X,Y,kelurahan,crs\n' + L1.map(x => { const q = CORE.crsFwd(SET.crs, x.lat, x.lon); return `${x.nomor},${q[0].toFixed(3)},${q[1].toFixed(3)},${x.kel},${SET.crs}`; }).join('\n') + '\n';
   download(new Blob([t], { type: 'text/csv' }), `SU_sudah_ketemu_${kel.replace(/\W+/g, '_')}.csv`);
 }
-function simpanPola() { return { on: POLA.on, titik: POLA.titik, nomor: $('inNoSU') ? $('inNoSU').value : '' }; }
-function muatPola(o) { POLA.on = !!o.on; POLA.titik = o.titik || null; if ($('inPola')) $('inPola').checked = POLA.on; if ($('inNoSU')) $('inNoSU').value = o.nomor || ''; renderPola(); }
+function simpanPola() { return { on: POLA.on, titik: POLA.titik, nomor: $('inNoSU') ? $('inNoSU').value : '', tahun: $('inThSU') ? $('inThSU').value : '', kode: POLA.su.kode }; }
+function muatPola(o) { POLA.on = !!o.on; POLA.titik = o.titik || null; POLA.su.kode = o.kode || null; POLA.su.tahun = +o.tahun || null; if ($('inPola')) $('inPola').checked = POLA.on; if ($('inNoSU')) $('inNoSU').value = o.nomor || ''; if ($('inThSU')) $('inThSU').value = o.tahun || ''; renderPola(); }
 function initPola() {
   if (!$('inPola')) return;
   try { POLA.on = localStorage.getItem('plotkw.pola') === '1'; } catch (e) { /* abaikan */ }
   $('inPola').checked = POLA.on;
   $('inPola').onchange = () => { POLA.on = $('inPola').checked; try { localStorage.setItem('plotkw.pola', POLA.on ? '1' : '0'); } catch (e) { /* abaikan */ } LOG.info('Mode pola jalan ' + (POLA.on ? 'aktif' : 'mati')); if (S.cands.length) renderCands(); renderPola(); };
-  $('inNoSU').oninput = renderPola;
+  $('inNoSU').oninput = renderPola; $('inThSU').oninput = () => { POLA.su.tahun = +$('inThSU').value || null; renderPola(); };
   $('btnTitikPeta').onclick = safe('Titik perkiraan', async () => {
     if (!map) throw new Error('Peta tidak tersedia.');
     const c = map.getCenter(); POLA.titik = { lat: c.lat, lon: c.lng, r: Math.max(30, +$('inPolaR').value || POLA.rBawaan) };
@@ -1196,4 +1216,120 @@ function initPola() {
 // buka pengaturan AI dan arahkan ke kotak kunci
 function bukaSetAI() {
   try { go(2); const d = $('aiSet'); d.open = true; setTimeout(() => { $('inAiKey').scrollIntoView({ block: 'center', behavior: 'smooth' }); $('inAiKey').focus(); }, 150); } catch (e) { /* abaikan */ }
+}
+
+/* ---------- DATA PERSIL (DXF dari AutoCAD; diproses & disimpan hanya di browser ini) ----------
+   Dipakai untuk: (1) SU yang sudah ada di persil → langsung ketemu, koordinat persis dari persil;
+   (2) area pencarian di sekitar SU bernomor berdekatan (kode & tahun sama);
+   (3) bidang tidak boleh menimpa bidang persil; kandidat yang sisinya menempel bidang tetangga diutamakan.
+   Setelan dikunci dari benchmark tuning (tests/benchmark/persil.js): k=3, r=60 m, bobot tempel 0,2. */
+const PERSIL = { bidang: [], file: [] };
+const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000 };
+function idb() { return new Promise((ok, no) => { const r = indexedDB.open('plotkw', 1); r.onupgradeneeded = () => r.result.createObjectStore('data'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
+async function idbSet(k, v) { const d = await idb(); return new Promise((ok, no) => { const t = d.transaction('data', 'readwrite'); t.objectStore('data').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); }
+async function idbGet(k) { const d = await idb(); return new Promise((ok, no) => { const r = d.transaction('data').objectStore('data').get(k); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
+function siapkanBidangPersil(b, crs, file) {
+  const ll = b.pts.map(p => CORE.crsInv(crs, p[0], p[1])), c = CORE.centroid(ll);
+  return { ll, c, bb: [Math.min(...ll.map(p => p[0])), Math.min(...ll.map(p => p[1])), Math.max(...ll.map(p => p[0])), Math.max(...ll.map(p => p[1]))], nib: b.nib, hak: b.hak, su: b.su, luas: b.luas, luasPoligon: b.luasPoligon, file };
+}
+function tebakCrsPersil(bidang) { // koordinat harus jatuh di sekitar Samarinda
+  const c = bidang.slice(0, 50).map(b => CORE.centroid(b.pts));
+  for (const crs of ['tm3-50.2', 'tm3-50.1', 'utm-50s']) { const ok = c.filter(p => { const q = CORE.crsInv(crs, p[0], p[1]); return q[0] > -0.9 && q[0] < -0.2 && q[1] > 116.9 && q[1] < 117.5; }).length; if (ok > 0.8 * c.length) return crs; }
+  return null;
+}
+const muatPersil = safe('Muat data persil', async files => {
+  files = [...files].filter(f => /\.dxf$/i.test(f.name)); if (!files.length) throw new Error('Pilih file .dxf (dari AutoCAD: Save As → AutoCAD DXF). File .dwg tidak bisa dibaca di browser.');
+  for (const f of files) {
+    toast(`Membaca ${f.name}…`, 'ok'); await sleep(30);
+    const t0 = performance.now(), r = CORE.dxfPersil(await f.text());
+    if (!r.bidang.length) { LOG.warn(`${f.name}: tidak ada poligon (LWPOLYLINE)`); continue; }
+    const crs = tebakCrsPersil(r.bidang);
+    if (!crs) throw new Error(`${f.name}: koordinat tidak berada di Samarinda pada TM-3 50.2/50.1 maupun UTM 50S.`);
+    PERSIL.file = PERSIL.file.filter(x => x.nama !== f.name); PERSIL.bidang = PERSIL.bidang.filter(b => b.file !== f.name);
+    const bid = r.bidang.map(b => siapkanBidangPersil(b, crs, f.name));
+    PERSIL.bidang.push(...bid);
+    PERSIL.file.push({ nama: f.name, crs, n: bid.length, su: bid.filter(b => b.su).length });
+    // kenali kode kelurahan dari nama file (mis. "persil Sidomulyo.dxf")
+    const kodeHit = {}; for (const b of bid) if (b.su) kodeHit[b.su.kode] = (kodeHit[b.su.kode] || 0) + 1;
+    const kode = Object.keys(kodeHit).sort((a, b) => kodeHit[b] - kodeHit[a])[0];
+    if (kode && !KODE_KEL[kode] && SMD.wil) for (const kc of SMD.wil.kecamatan) for (const kl of kc.kelurahan) if (f.name.toLowerCase().includes(kl.nama.toLowerCase())) KODE_KEL[kode] = [kc.nama, kl.nama];
+    LOG.info(`Data persil ${f.name}: ${bid.length} bidang, ${bid.filter(b => b.su).length} ber-SU, ${bid.filter(b => b.nib).length} ber-NIB (${crs}, ${Math.round(performance.now() - t0)} ms)`, { teksTakMasuk: r.teksLepas });
+  }
+  try { await idbSet('persil', { file: PERSIL.file, bidang: PERSIL.bidang }); } catch (e) { LOG.warn('Data persil tidak bisa disimpan di browser; perlu dimuat ulang lain kali', e.message); }
+  if (!POLA.on) { POLA.on = true; $('inPola').checked = true; try { localStorage.setItem('plotkw.pola', '1'); } catch (e) { /* abaikan */ } toast('Mode pola jalan diaktifkan agar data persil dipakai saat mencari.', 'ok'); }
+  renderPersilInfo(); gambarPersil(); renderPola();
+});
+function renderPersilInfo() {
+  const el = $('persilInfo'); if (!el) return;
+  el.innerHTML = PERSIL.file.length ? `${PERSIL.bidang.length.toLocaleString('id-ID')} bidang dari ${PERSIL.file.length} file (${PERSIL.file.map(f => esc(f.nama.replace(/\.dxf$/i, ''))).join(', ')}). Tersimpan di browser ini.` : 'Belum ada data persil.';
+  $('btnPersilHapus').hidden = !PERSIL.file.length;
+}
+function gambarPersil() {
+  if (!map || !S.wil) return;
+  try {
+    if (!G.persil) { G.persil = L.layerGroup().addTo(map); PERSIL.rend = L.canvas ? L.canvas({ padding: 0.3 }) : undefined; }
+    G.persil.clearLayers(); if (!PERSIL.bidang.length) return;
+    const B = wilBBox(), m = 0.003;
+    let n = 0;
+    for (const b of PERSIL.bidang) {
+      if (b.bb[2] < B.s - m || b.bb[0] > B.n + m || b.bb[3] < B.w - m || b.bb[1] > B.e + m || b.luasPoligon > PERSIL_ATUR.refMaksLuas * 20) continue;
+      const pl = L.polygon(b.ll, { renderer: PERSIL.rend, color: '#8A6D3B', weight: 1, fill: true, fillOpacity: 0.03, opacity: 0.8 });
+      pl.bindPopup(() => `<b>${b.nib ? 'NIB ' + esc(b.nib) : 'Tanpa NIB'}</b><br>${esc(b.hak || 'Nomor hak: –')}<br>${esc(b.su ? b.su.teks : 'SU: –')}<br>Luas ${b.luas ? b.luas + ' m² (label)' : '–'} · poligon ${Math.round(b.luasPoligon)} m²`);
+      pl.addTo(G.persil); n++;
+    }
+    LOG.info(`Persil digambar di peta: ${n} bidang`);
+  } catch (e) { LOG.warn('Persil tidak bisa digambar di peta', e.message); }
+}
+// bidang persil di dalam area (koordinat lokal), untuk penalti tumpang tindih & hitung "sisi menempel"
+function polaRef() {
+  const a = areaPola(); if (!a || !a.persil || !PROJ) return undefined;
+  const cs = lingkaranXY(a);
+  const ref = PERSIL.bidang.filter(b => b.luasPoligon < PERSIL_ATUR.refMaksLuas && (b.nib || b.su || b.hak)).map(b => b.ll.map(p => PROJ.fwd(p[0], p[1])))
+    .filter(pp => { const q = CORE.centroid(pp); return dalamArea(cs, q[0], q[1], 150); });
+  return ref;
+}
+function tempelPersil(T, ctx, ref) {
+  const pm = ctx.parcelM.map(p => CORE.fwdT(T, p[0], p[1])), tutup = ref.map(pp => pp.concat([pp[0]]));
+  let n = 0, ok = 0;
+  for (let i = 0; i < pm.length; i++) {
+    const a = pm[i], b = pm[(i + 1) % pm.length], m = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])));
+    for (let j = 0; j < m; j++) { const q = [a[0] + (b[0] - a[0]) * (j + 0.5) / m, a[1] + (b[1] - a[1]) * (j + 0.5) / m]; n++; if (tutup.some(pp => CORE.plNearest(pp, q).d <= PERSIL_ATUR.tempelM)) ok++; }
+  }
+  return n ? ok / n : 0;
+}
+function urutPersil(cands, ctx) {
+  const ref = polaRef(); if (!ref || !ref.length || !ctx) return cands;
+  const o = cands.map(k => ({ ...k, tempel: tempelPersil(k.T, ctx, ref) })).sort((a, b) => (b.r.score + PERSIL_ATUR.wTempel * b.tempel) - (a.r.score + PERSIL_ATUR.wTempel * a.tempel));
+  LOG.info('Kandidat diurutkan ulang dengan data persil (sisi menempel)', o.map(k => ({ skor: +k.r.score.toFixed(3), tempel: +k.tempel.toFixed(2) })));
+  return o.map((k, i) => ({ ...k, label: '#' + (i + 1) }));
+}
+// SU yang sedang dicari sudah ada di data persil?
+function cariSUPersil() {
+  const no = +($('inNoSU') && $('inNoSU').value), th = +($('inThSU') && $('inThSU').value) || POLA.su.tahun, kode = kodeKelAktif();
+  if (!no || !th || !kode || !PERSIL.bidang.length) return null;
+  return PERSIL.bidang.find(b => b.su && b.su.kode === kode && b.su.nomor === no && b.su.tahun === th) || null;
+}
+function renderSUPersil() {
+  const el = $('suPersil'); if (!el) return;
+  const b = POLA.on ? cariSUPersil() : null;
+  el.hidden = !b; if (!b) return;
+  el.innerHTML = `<b>SU ini sudah ada di data persil.</b> ${b.nib ? 'NIB ' + esc(b.nib) + ', ' : ''}${esc(b.hak || 'nomor hak –')}, luas ${b.luas ?? Math.round(b.luasPoligon)} m².
+    <div class="row" style="margin-top:6px"><button class="btn" id="btnPersilLihat">Lihat di peta</button><button class="btn pri" id="btnPersilSalin">Salin bidang persil ke AutoCAD</button></div>`;
+  $('btnPersilLihat').onclick = () => { if (!map) return; map.fitBounds(L.latLngBounds(b.ll).pad(2), { maxZoom: 20 }); L.popup().setLatLng(b.c).setContent(`SU ${b.su.nomor}/${b.su.tahun}${b.nib ? ' · NIB ' + esc(b.nib) : ''}`).openOn(map); };
+  $('btnPersilSalin').onclick = safe('Salin bidang persil', async () => {
+    const xy = b.ll.map(p => CORE.crsFwd(SET.crs, p[0], p[1])), txt = perintahDariXY([xy]);
+    await navigator.clipboard.writeText(txt).catch(() => { throw new Error('Clipboard ditolak browser. Coba lagi.'); });
+    LOG.info(`Bidang persil SU ${b.su.nomor}/${b.su.tahun} disalin untuk AutoCAD (${SET.crs})`);
+    toast('Bidang persil tersalin dengan koordinat persis dari data persil. Tempel di command line AutoCAD, tekan Enter sekali.', 'ok');
+  });
+}
+async function initPersil() {
+  if (!$('filePersil')) return;
+  $('filePersil').onchange = e => { muatPersil(e.target.files); e.target.value = ''; };
+  $('btnPersilHapus').onclick = safe('Hapus data persil', async () => { PERSIL.bidang = []; PERSIL.file = []; await idbSet('persil', null).catch(() => {}); renderPersilInfo(); gambarPersil(); renderPola(); toast('Data persil dihapus dari browser ini.', 'ok'); });
+  try {
+    const v = await idbGet('persil');
+    if (v && v.bidang && v.bidang.length) { PERSIL.bidang = v.bidang; PERSIL.file = v.file || []; LOG.info(`Data persil dimuat dari browser: ${PERSIL.bidang.length} bidang`); gambarPersil(); }
+  } catch (e) { LOG.warn('Data persil tersimpan tidak bisa dibaca', e.message); }
+  renderPersilInfo(); renderPola();
 }

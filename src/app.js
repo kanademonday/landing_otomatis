@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.12.1';
+const APP_VERSION = '2.13.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -351,6 +351,7 @@ function setWilayah(w) {
   G.osm && G.osm.clearLayers(); G.cand && G.cand.clearLayers(); G.res && G.res.clearLayers();
   LOG.info('Wilayah dipilih: ' + w.name, { ring: w.rings.length, titik: w.rings.reduce((a, r) => a + r.length, 0) });
   markDone();
+  try { gambarPersil(); renderPola(); } catch (e) { /* abaikan */ }
 }
 function drawWilayah() {
   if (!map || !S.wil) return;
@@ -835,7 +836,7 @@ function buildCtx(s0, tanpaNama) {
   const t0 = performance.now();
   const ctx = CORE.prepareCtx({
     ways: S.osm.ways, nodeXY, roadsImg: tanpaNama ? S.roads.map(r => ({ ...r, name: '' })) : S.roads, parcelImg: S.parcel, imgW: S.img.w, imgH: S.img.h,
-    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: polaInArea() || inAreaFn, wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
+    s0, tau: Math.max(2, +$('inTau').value || 12), inArea: polaInArea() || inAreaFn, refXY: polaRef(), wRev: Math.min(0.6, Math.max(0, +$('inWrev').value || 0.3)),
     log: (l, m) => l === 'warn' ? LOG.warn(m) : LOG.info(m)
   });
   LOG.info(`Konteks pencocokan siap (${Math.round(performance.now() - t0)} ms)`);
@@ -894,7 +895,7 @@ const runMatch = safe('Pencocokan', async () => {
       LOG.info('Nama jalan dipakai sebagai petunjuk', list.map(c => ({ skorBentuk: +c.r.score.toFixed(3), namaCocok: c.nama, sumber: c.sumber })));
     }
     S.cands = list.map((c, i) => ({ T: c.T, r: c.r, nama: c.nama, label: '#' + (i + 1) }));
-    if (POLA.on) S.cands = saringPola(S.cands, CTX);
+    if (POLA.on) S.cands = urutPersil(saringPola(S.cands, CTX), CTX);
   } finally { $('btnMatch').disabled = false; }
   $('prog').style.width = '100%';
   const dt = ((performance.now() - t0) / 1000).toFixed(1);
@@ -1111,6 +1112,7 @@ function init() {
   $('inFoot').onchange = () => { if (S.wil && SMD.jalan) { S.cands = []; S.sel = -1; S.T = null; terapkanJalanOffline(); } };
   initDataSamarinda();
   initPola();
+  initPersil();
   $('btnManualArea').onclick = safe('Area manual', async () => {
     if (!map) throw new Error('Peta tidak tersedia.');
     const c = map.getCenter(), r = +$('inRad').value || 1500;

@@ -147,7 +147,7 @@ function buat() {
   }
   return { dibuat: 'deterministik seed ' + CFG.seed, kategori: KAT, split, kasus };
 }
-module.exports = { buat, KAT, rng, hash };
+module.exports = { buat, KAT, rng, hash, siapkan, keGambar };
 if (require.main === module) {
   const out = buat(); fs.mkdirSync(__dirname + '/out', { recursive: true });
   fs.writeFileSync(__dirname + '/out/kasus.json', JSON.stringify(out));

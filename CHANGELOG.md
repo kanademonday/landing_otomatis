@@ -2,6 +2,15 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.13.0 — 2026-11-25 — Data persil (DXF) untuk mencari bidang
+- **Muat file persil (.dxf)** di langkah 1 (boleh beberapa file, mis. satu per kelurahan). Poligon bidang dan label NIB, nomor hak, SU, dan luas dibaca otomatis; sistem koordinat dikenali (TM-3 50.2/50.1, UTM 50S). Data hanya diproses dan disimpan di browser (IndexedDB), tidak dikirim ke mana pun. Bidang persil tampil di peta; klik untuk melihat NIB/hak/SU/luas.
+- **SU yang sudah ada di persil langsung ketemu**: muncul kotak "SU ini sudah ada di data persil" dengan *Lihat di peta* dan *Salin bidang persil ke AutoCAD* (koordinat persis dari persil).
+- **Area pencarian dari SU bernomor berdekatan** (kode & tahun sama, 3 nomor terdekat): lingkaran 60 m di sekitar masing-masing.
+- **Bidang tidak boleh menimpa bidang persil**, dan kandidat yang **sisinya menempel** bidang tetangga diutamakan (skor + 0,2 × porsi sisi menempel). Label: "keyakinan tinggi" hanya bila ≥50% sisi menempel, kandidat kedua <30%, dan skor ≥0,8.
+- Memuat data persil otomatis menyalakan *Mode pola jalan*. Mode pola mati = hasil identik v2.11.0 (diuji 480/480).
+- Kode wilayah Samarinda Ilir lengkap: 16010401 Selili, 02 Sungai Dama, 03 Sidomulyo, 04 Sidodamai, 05 Pelita.
+- Hasil uji (bidang persil yang sudah berlokasi diperlakukan seolah belum dilanding, gaya SU asli satu jalan): kelurahan uji akhir Sidomulyo (tidak dipakai menyetel) — ketemu #1 **28% → 58%**, label "keyakinan tinggi" **19/20 benar**. 15 SU nyata Sidomulyo 1998: #1 benar (≤25 m) 0 → 2, satu-satunya "keyakinan tinggi" benar.
+
 ## v2.12.1 — 2026-11-23
 - Bila kunci API Groq belum diisi di browser yang dipakai, *Digitasi otomatis* tidak lagi berakhir dengan error: pengaturan AI langsung dibuka dan kotak kunci disorot, dengan petunjuk untuk menempel kunci lalu mengulang.
 
