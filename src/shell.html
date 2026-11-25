@@ -187,6 +187,8 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
 .l-ERROR{color:var(--merah)}.l-WARN{color:var(--oranye)}.l-INFO{color:var(--tinta2)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:3000;display:flex;flex-direction:column-reverse;gap:6px;width:min(460px,calc(100% - 24px));pointer-events:none}
 #toast div{background:var(--putih);border:1px solid var(--garis);border-left:4px solid var(--teal);padding:9px 12px;border-radius:var(--r);box-shadow:0 6px 18px rgba(24,48,46,.12);font-size:14px}
+#prosesBar{position:fixed;left:16px;bottom:18px;z-index:3001;display:flex;align-items:center;gap:10px;background:var(--tinta);color:#fff;padding:8px 10px 8px 14px;border-radius:var(--r);box-shadow:0 6px 18px rgba(24,48,46,.25);font-size:14px;max-width:min(520px,calc(100% - 32px))}
+#prosesBar .btn{background:#fff;color:var(--tinta);border-color:#fff}
 #toast div.err{border-left-color:var(--merah)}#toast div.warn{border-left-color:var(--oranye)}#toast div.ok{border-left-color:var(--hijau)}
 
 /* ---------- peta ---------- */
@@ -467,6 +469,7 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
     <button class="btn kecil" id="logCopy">Salin</button><button class="btn kecil pri" id="logDl">Unduh log</button><button class="btn kecil" id="logClear">Bersihkan</button><button class="btn kecil" id="logClose">Tutup</button></div>
   <pre id="logPre"></pre>
 </div>
+<div id="prosesBar" role="status" hidden><span id="prosesTx"></span><button class="btn kecil" id="btnBatal">Batal</button></div>
 <div id="toast" role="status"></div>
 
 <script>

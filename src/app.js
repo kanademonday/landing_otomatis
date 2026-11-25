@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.13.0';
+const APP_VERSION = '2.14.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -61,7 +61,10 @@ function toast(msg, kind = '') {
 function safe(label, fn) {
   return async (...a) => {
     try { await fn(...a); }
-    catch (err) { LOG.error(label + ' gagal: ' + err.message, err); toast(label + ' gagal: ' + err.message + ' (lihat 🧾 Log)', 'err'); }
+    catch (err) {
+      if (err && err.batal) { LOG.info(label + ' dibatalkan pengguna'); return; }
+      LOG.error(label + ' gagal: ' + err.message, err); toast(label + ' gagal: ' + err.message + ' (lihat 🧾 Log)', 'err');
+    }
   };
 }
 function download(blob, name) {

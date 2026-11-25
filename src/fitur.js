@@ -334,7 +334,7 @@ function renderDocs() {
   if (!DOCS.list.length) { el.innerHTML = ''; return; }
   el.innerHTML = DOCS.list.map(d => {
     const k = d.info.kode ? (KODE_KEL[d.info.kode] ? `${KODE_KEL[d.info.kode][1]}, ${KODE_KEL[d.info.kode][0]}` : `kode ${d.info.kode} (belum dikenal)`) : 'kode wilayah tidak terbaca dari nama file';
-    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span>${d.info.jenis === 'SU' ? `<button class="btn kecil pri nf" data-digit="${d.id}" title="Baca, ambil halaman gambar, telusuri, putar ke utara, lalu cocokkan">Digitasi otomatis</button>` : ''}<button class="btn kecil nf" data-baca="${d.id}">${AI.hasil[d.id] ? 'Baca ulang' : 'Baca otomatis'}</button><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
+    return `<div class="doc"><div class="doc-h"><b>${esc(d.info.label)}</b><span class="hint">${esc(k)}</span>${PROSES.jalan === d.id ? `<button class="btn kecil nf" data-batal="1">Batal</button>` : d.info.jenis === 'SU' ? `<button class="btn kecil pri nf" data-digit="${d.id}" title="Baca, ambil halaman gambar, telusuri, putar ke utara, lalu cocokkan">Digitasi otomatis</button><button class="btn kecil nf" data-bacasaja="${d.id}" title="Isi luas & skala lalu buka halaman gambar; jalan dan bidang Anda gambar sendiri">Baca saja</button>` : ''}<button class="btn kecil nf" data-baca="${d.id}">${AI.hasil[d.id] ? 'Baca ulang' : 'Baca otomatis'}</button><button class="btn kecil nf" data-hapus="${d.id}" aria-label="Tutup berkas">✕</button></div>
       <div class="thumbs">${d.thumbs.map((t, i) => `<button class="thumb" data-doc="${d.id}" data-pg="${i + 1}" title="Halaman ${i + 1}"><img src="${t.url}" alt="Halaman ${i + 1}"><span>${i + 1}</span></button>`).join('')}</div>
       <div data-hasil="${d.id}">${htmlHasil(d)}</div></div>`;
   }).join('');
@@ -342,6 +342,8 @@ function renderDocs() {
   el.querySelectorAll('[data-hapus]').forEach(b => b.onclick = () => { DOCS.list = DOCS.list.filter(d => d.id !== b.dataset.hapus); renderDocs(); });
   el.querySelectorAll('[data-baca]').forEach(b => b.onclick = () => bacaBerkas(b.dataset.baca, !!AI.hasil[b.dataset.baca]));
   el.querySelectorAll('[data-digit]').forEach(b => b.onclick = () => digitasiOtomatis(b.dataset.digit));
+  el.querySelectorAll('[data-bacasaja]').forEach(b => b.onclick = () => bacaSaja(b.dataset.bacasaja));
+  el.querySelectorAll('[data-batal]').forEach(b => b.onclick = batalkanProses);
   el.querySelectorAll('[data-isi]').forEach(b => b.onclick = () => isiDariHasil(b.dataset.isi));
   el.querySelectorAll('[data-gbr]').forEach(b => b.onclick = () => { const d = DOCS.list.find(x => x.id === b.dataset.gbr); if (d) bukaPenampil(d.id, AI.hasil[d.id].gabung.halamanGambar); });
   $('btnBacaSemua').hidden = DOCS.list.length < 2;
@@ -509,16 +511,16 @@ async function panggilGroq(gambarB64, prompt, skema) {
     const t0 = performance.now(); let res;
     try {
       res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AI.key },
+        signal: sinyalBatal(), method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + AI.key },
         body: JSON.stringify({ model: AI.model, temperature: 0, response_format: { type: 'json_object' }, reasoning_effort: 'none',
           messages: [{ role: 'user', content: [{ type: 'text', text: isiPrompt }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + gambarB64 } }] }] })
       });
-    } catch (e) { LOG.error('Groq tidak bisa dihubungi', e.message); throw new Error('Layanan AI online (Groq) tidak bisa dihubungi. Periksa internet.'); }
+    } catch (e) { cekBatal(); LOG.error('Groq tidak bisa dihubungi', e.message); throw new Error('Layanan AI online (Groq) tidak bisa dihubungi. Periksa internet.'); }
     const txt = await res.text();
     if (res.status === 429) { // batas pemakaian gratis: tunggu lalu ulangi
       const tunggu = Math.min(60, +(res.headers.get('retry-after') || 0) || 10 * (coba + 1));
       LOG.warn(`Batas pemakaian Groq tercapai, menunggu ${tunggu} dtk`, txt.slice(0, 200)); toast(`Batas pemakaian gratis tercapai. Menunggu ${tunggu} detik lalu mencoba lagi…`, 'warn');
-      await sleep(tunggu * 1000); continue;
+      await tidurBatal(tunggu * 1000); continue;
     }
     if (res.status === 400 && /reasoning_effort/i.test(txt) && coba === 0) { LOG.warn('Model tidak mendukung reasoning_effort, dicoba tanpa'); continue; }
     if ((res.status === 404 || res.status === 400) && /model/i.test(txt) && !AI._gantiOtomatis) {
@@ -545,7 +547,7 @@ async function panggilOllama(gambarB64, prompt, skema) {
   const t0 = performance.now();
   let res;
   try {
-    res = await fetch(AI.url + '/api/chat', {
+    res = await fetch(AI.url + '/api/chat', { signal: sinyalBatal(),
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: AI.model, stream: false, format: skema, options: { temperature: 0, num_ctx: 8192 }, messages: [{ role: 'user', content: prompt, images: [gambarB64] }] })
     });
@@ -649,8 +651,8 @@ const bacaBerkas = safe('Baca otomatis', async (id, paksa) => {
       hal = (J.halaman || []).slice(0, d.n); while (hal.length < d.n) hal.push(null);
     } else for (let i = 1; i <= d.n; i++) {
       if (el) el.innerHTML = `<p class="hint">Membaca halaman ${i} dari ${d.n} dengan AI…</p>`;
-      const r = await renderHalaman(d.pdf, i, null, 120);
-      hal.push(await panggilAI(r.url.split(',')[1], PROMPT_BACA, SKEMA_BACA));
+      cekBatal(); const r = await renderHalaman(d.pdf, i, null, 120);
+      hal.push(await panggilAI(r.url.split(',')[1], PROMPT_BACA, SKEMA_BACA)); cekBatal();
     }
     const g = gabungHasil(hal);
     AI.hasil[id] = { halaman: hal, gabung: g }; simpanCacheBaca(d);
@@ -755,8 +757,14 @@ const digitasiOtomatis = safe('Digitasi otomatis', async id => {
   LOG.info(`=== Digitasi otomatis ${d.info.label} ===`);
   simpanSetAI();
   if (AI.prov === 'groq' && !AI.key && !AI.hasil[id]) { bukaSetAI(); LOG.warn('Digitasi otomatis dibatalkan: kunci API Groq belum diisi di browser ini'); toast('Kunci API Groq belum diisi di browser ini. Tempel kunci (gsk_…) di kotak yang sudah dibuka, lalu klik Digitasi otomatis lagi.', 'warn'); return; }
+  prosesMulai(id, 'Digitasi otomatis ' + d.info.label);
+  try { await digitasiInti(d, id, t0, langkah); } finally { prosesSelesai(); }
+});
+async function digitasiInti(d, id, t0, langkah0) {
+  const langkah = t => { langkah0(t); prosesLangkah(t); };
   // 1. baca isian
   if (!AI.hasil[id]) { langkah('membaca dokumen…'); await bacaBerkas(id); }
+  cekBatal();
   if (!AI.hasil[id]) throw new Error('Pembacaan dokumen gagal (lihat log). Periksa kunci API / koneksi AI.');
   const g = AI.hasil[id].gabung;
   isiDariHasil(id);
@@ -767,22 +775,25 @@ const digitasiOtomatis = safe('Digitasi otomatis', async id => {
   VW.doc = d; VW.pg = hg; await pakaiHalaman();
   const nama = `${d.info.label} hal ${hg}`;
   for (let i = 0; i < 200 && !(S.img && S.img.name === nama && imgEl && imgEl.complete); i++) await sleep(50);
+  cekBatal();
   if (!S.img || S.img.name !== nama) throw new Error('Halaman gambar gagal disiapkan.');
   // 3. telusuri + putar ke utara
   langkah('AI menelusuri jalan, bidang, dan panah utara…');
   await telusuriOtomatis();
+  cekBatal();
   if (!S.parcel || !S.roads.length) { renderDocs(); go(2); throw new Error('AI tidak menemukan bidang atau jalan pada gambar. Telusuri manual dengan alat Jalan dan Bidang, lalu lanjut ke Cocokkan.'); }
   // 4. cocokkan
   if (!S.osm) { renderDocs(); go(1); throw new Error('Data jalan wilayah belum siap. Pilih kelurahan di langkah 1, lalu lanjutkan ke Cocokkan.'); }
   langkah('mencocokkan dengan peta…');
   await runMatch();
+  cekBatal();
   renderDocs();
   if (!S.cands.length) throw new Error('Pencocokan tidak menghasilkan kandidat.');
   go(4);
   const dt = ((performance.now() - t0) / 1000).toFixed(0);
   LOG.info(`Digitasi otomatis selesai dalam ${dt} dtk`, { skor: +S.cands[0].r.score.toFixed(3), kandidat: S.cands.length });
   toast(`Digitasi otomatis selesai (${dt} dtk). Periksa hasil di peta & pemeriksaan data, lalu Salin bidang untuk AutoCAD.`, 'ok');
-});
+}
 
 /* ---------- rapatkan bidang hasil AI ke garis tinta pada gambar ---------- */
 // AI sering meleset beberapa milimeter; poligon digeser/diputar/diskalakan sedikit, lalu tiap sudut dicari di sekitarnya
@@ -1324,6 +1335,7 @@ function renderSUPersil() {
   });
 }
 async function initPersil() {
+  if ($('btnBatal')) $('btnBatal').onclick = batalkanProses;
   if (!$('filePersil')) return;
   $('filePersil').onchange = e => { muatPersil(e.target.files); e.target.value = ''; };
   $('btnPersilHapus').onclick = safe('Hapus data persil', async () => { PERSIL.bidang = []; PERSIL.file = []; await idbSet('persil', null).catch(() => {}); renderPersilInfo(); gambarPersil(); renderPola(); toast('Data persil dihapus dari browser ini.', 'ok'); });
@@ -1333,3 +1345,41 @@ async function initPersil() {
   } catch (e) { LOG.warn('Data persil tersimpan tidak bisa dibaca', e.message); }
   renderPersilInfo(); renderPola();
 }
+
+/* ---------- proses panjang yang bisa dibatalkan (Digitasi otomatis, Baca saja) ---------- */
+const PROSES = { jalan: null, batal: false, ctl: null };
+function sinyalBatal() { return PROSES.ctl ? PROSES.ctl.signal : undefined; }
+function cekBatal() { if (PROSES.batal) { const e = new Error('Dibatalkan'); e.batal = true; throw e; } }
+async function tidurBatal(ms) { for (let t = 0; t < ms; t += 200) { cekBatal(); await sleep(Math.min(200, ms - t)); } cekBatal(); }
+function prosesMulai(id, judul) {
+  if (PROSES.jalan) throw new Error('Masih ada proses berjalan. Tunggu selesai atau klik Batal.');
+  PROSES.jalan = id; PROSES.batal = false; PROSES.ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  PROSES.judul = judul; $('prosesBar').hidden = false; $('prosesTx').textContent = judul + '…'; renderDocs();
+}
+function prosesLangkah(t) { if ($('prosesTx')) $('prosesTx').textContent = `${PROSES.judul}: ${t}`; }
+function prosesSelesai() { PROSES.jalan = null; PROSES.ctl = null; AI.sibuk = false; $('prosesBar').hidden = true; renderDocs(); }
+function batalkanProses() {
+  if (!PROSES.jalan) return;
+  PROSES.batal = true; try { PROSES.ctl && PROSES.ctl.abort(); } catch (e) { /* abaikan */ }
+  $('prosesTx').textContent = 'Membatalkan…'; LOG.info('Pengguna menekan Batal'); toast('Dibatalkan. Isian yang sudah terbaca tetap disimpan.', 'warn');
+}
+// Baca saja: isi luas & skala dari dokumen lalu buka halaman gambar; penelusuran jalan & bidang dilakukan pengguna
+const bacaSaja = safe('Baca saja', async id => {
+  const d = DOCS.list.find(x => x.id === id); if (!d) return;
+  simpanSetAI();
+  if (AI.prov === 'groq' && !AI.key && !AI.hasil[id]) { bukaSetAI(); toast('Kunci API Groq belum diisi di browser ini. Tempel kunci (gsk_…) lalu klik Baca saja lagi.', 'warn'); return; }
+  prosesMulai(id, 'Baca saja ' + d.info.label);
+  try {
+    if (!AI.hasil[id]) { prosesLangkah('membaca dokumen'); await bacaBerkas(id); }
+    cekBatal();
+    if (!AI.hasil[id]) throw new Error('Pembacaan dokumen gagal (lihat log).');
+    isiDariHasil(id);
+    const hg = AI.hasil[id].gabung.halamanGambar || Math.min(2, d.n);
+    prosesLangkah(`membuka halaman gambar (hal. ${hg})`);
+    VW.doc = d; VW.pg = hg; await pakaiHalaman(); cekBatal();
+    go(2); try { pilihAlat('road'); } catch (e) { /* abaikan */ }
+    const L0 = getLuas(), sk = $('inSkala') ? $('inSkala').value : '';
+    LOG.info(`Baca saja ${d.info.label}: luas ${L0 || '–'} m², skala 1:${sk || '–'}, halaman gambar ${hg}`);
+    toast(`Luas ${L0 ? L0 + ' m²' : 'tidak terbaca (isi manual)'}${sk ? ', skala 1:' + sk : ''}. Gambar halaman ${hg} siap: telusuri jalan, lalu bidang, lalu Cocokkan.`, L0 ? 'ok' : 'warn');
+  } finally { prosesSelesai(); }
+});

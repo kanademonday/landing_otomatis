@@ -2,6 +2,10 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.14.0 — 2026-11-25 — Tombol Batal dan Baca saja
+- **Batal**: selama *Digitasi otomatis* berjalan muncul bilah proses di kiri bawah dan tombol *Batal* di kartu berkas. Permintaan ke AI langsung dihentikan; isian yang sudah terbaca tetap disimpan; tidak dicatat sebagai error.
+- **Baca saja** (kartu berkas SU): AI hanya membaca isian (luas, skala, kelurahan), lalu halaman gambar dibuka di langkah 2 dengan alat *Jalan* aktif. Jalan dan bidang digambar sendiri, lalu *Cocokkan*. Lebih cepat (tanpa penelusuran AI dan tanpa pencocokan otomatis); bila berkas sudah pernah dibaca, langsung tanpa memanggil AI.
+
 ## v2.13.0 — 2026-11-25 — Data persil (DXF) untuk mencari bidang
 - **Muat file persil (.dxf)** di langkah 1 (boleh beberapa file, mis. satu per kelurahan). Poligon bidang dan label NIB, nomor hak, SU, dan luas dibaca otomatis; sistem koordinat dikenali (TM-3 50.2/50.1, UTM 50S). Data hanya diproses dan disimpan di browser (IndexedDB), tidak dikirim ke mana pun. Bidang persil tampil di peta; klik untuk melihat NIB/hak/SU/luas.
 - **SU yang sudah ada di persil langsung ketemu**: muncul kotak "SU ini sudah ada di data persil" dengan *Lihat di peta* dan *Salin bidang persil ke AutoCAD* (koordinat persis dari persil).
