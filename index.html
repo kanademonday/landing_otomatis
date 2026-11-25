@@ -402,6 +402,13 @@ input.dari-ai{box-shadow:0 0 0 3px #f8dd8a;border-color:#c99a1c}
       <select id="inCrs"><option value="tm3-50.2">TM-3 zona 50.2 (Samarinda, bujur ≥ 117°)</option><option value="tm3-50.1">TM-3 zona 50.1 (bujur &lt; 117°)</option><option value="utm-50s">UTM zona 50S</option></select>
       <label class="cek" style="margin-top:10px"><input type="checkbox" id="inForce" checked> Samakan luas poligon dengan luas BT/SU</label>
       <button class="btn pri" id="btnCopyAcad" style="width:100%;height:42px;margin-top:10px">Salin bidang untuk AutoCAD</button>
+<p class="hint" style="margin-top:8px"><b>Cara cepat (disarankan):</b> pasang perintah <b>TB</b> sekali saja, lalu setiap kali selesai menyalin cukup ketik <b>TB</b> Enter di AutoCAD; bidang langsung tergambar di koordinat aslinya.</p>
+      <button class="btn" id="btnUnduhTB" style="width:100%">Unduh perintah TB untuk AutoCAD (sekali saja)</button>
+      <ol class="langkah">
+        <li>Di AutoCAD ketik <b>APPLOAD</b> Enter, pilih file <b>TB.lsp</b> yang diunduh, klik <b>Load</b>. Agar otomatis setiap AutoCAD dibuka: di jendela yang sama klik <b>Contents…</b> (Startup Suite) → <b>Add…</b> → pilih TB.lsp.</li>
+        <li>Klik <b>Salin bidang untuk AutoCAD</b> di atas, lalu di AutoCAD ketik <b>TB</b> Enter.</li>
+      </ol>
+      <p class="hint"><b>Tanpa TB:</b> Ctrl+V di area gambar hanya menempelkan <i>tulisan</i>. Tempelkan di <i>command line</i>:</p>
 <ol class="langkah">
         <li>Di AutoCAD, tekan <b>Esc</b> dua kali agar tidak ada perintah yang sedang berjalan.</li>
         <li>Klik kotak <i>command line</i> di bagian bawah (bukan area gambar).</li>
@@ -632,21 +639,34 @@ const CORE = (() => {
       if (!grp) g.push(grp = { y0: t.y, x: t.x, isi: [] });
       grp.isi.push({ s: s0, y: t.y });
     }
-    const cari = (x, y) => { const c = (grid.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []).filter(k => { const p = bid[k]; return x >= p.bb[0] && x <= p.bb[2] && y >= p.bb[1] && y <= p.bb[3] && pointInRing(x, y, p.pts); }); return c.length ? c.reduce((m, k) => bid[k].luasPoligon < bid[m].luasPoligon ? k : m) : -1; };
+    const memuat = (x, y) => (grid.get(key(Math.floor(x / cell), Math.floor(y / cell))) || []).filter(k => { const p = bid[k]; return x >= p.bb[0] && x <= p.bb[2] && y >= p.bb[1] && y <= p.bb[3] && pointInRing(x, y, p.pts); });
+    const luasTeks = s0 => { const m = s0.match(/^Luas\s*:?\s*([\d.,]+)/i); return m ? +m[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.') : null; };
     let lepas = 0;
     for (const g of tumpuk.values()) for (const grp of g) {
       const ym = grp.isi.reduce((a, q) => a + q.y, 0) / grp.isi.length;
-      let k = cari(grp.x, ym); if (k < 0) for (const q of grp.isi) { k = cari(grp.x, q.y); if (k >= 0) break; }
+      const L0 = grp.isi.map(q => luasTeks(q.s)).find(v => v > 0) || null;
+      let cand = memuat(grp.x, ym); if (!cand.length) for (const q of grp.isi) { cand = memuat(grp.x, q.y); if (cand.length) break; }
+      // pilih poligon yang luasnya sesuai label; poligon besar (blok/jalan/batas) tidak boleh "mengambil" label bidang
+      let k = -1, fit = Infinity;
+      for (const c of cand) {
+        const A = bid[c].luasPoligon;
+        if (L0) { const r = A / L0; if (r < 0.6 || r > 1.7) continue; const f = Math.abs(Math.log(r)); if (f < fit) { fit = f; k = c; } }
+        else if (A <= 20000 && (k < 0 || A < bid[k].luasPoligon)) { k = c; fit = 1; }
+      }
       if (k < 0) { lepas += grp.isi.length; continue; }
       const p = bid[k];
+      if (p._fit != null && p._fit <= fit) { lepas += grp.isi.length; continue; } // poligon sudah punya label yang lebih cocok
+      if (p._fit != null) { p.nib = p.hak = p.su = p.luas = null; }
+      p._fit = fit;
       for (const { s: s0 } of grp.isi) {
         let m;
         if ((m = s0.match(/^SU\.?\s*(\d{8})(\d{5})\s*\/\s*(\d{4})/i))) p.su = { kode: m[1], nomor: +m[2], tahun: +m[3], teks: s0 };
         else if (/^\d{5}$/.test(s0)) p.nib = s0;
-        else if ((m = s0.match(/^Luas\s*:?\s*([\d.,]+)/i))) p.luas = +m[1].replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.');
+        else if (luasTeks(s0)) p.luas = luasTeks(s0);
         else if (/^(M|HGB|HP|HPL|HW|W|HGU)\.\s*\d+/i.test(s0)) p.hak = s0.replace(/\s+/g, '');
       }
     }
+    for (const p of bid) delete p._fit;
     return { bidang: bid, teks: texts.length, teksLepas: lepas };
   }
   // Titik sampel di dalam poligon (untuk hitung tumpang tindih)
@@ -1153,7 +1173,7 @@ const CORE = (() => {
 </script>
 <script>
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.17.0';
+const APP_VERSION = '2.18.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -2356,7 +2376,8 @@ function cekKewajaran(r) {
   try {
     const pd = persilDiHasil();
     if (pd) { const b = pd.b, Lp = b.luas || Math.round(b.luasPoligon), d = lin ? (Lp / lin - 1) * 100 : 0;
-      tanda(Math.abs(d) <= 10 ? 'ok' : 'info', `Bidang persil di lokasi ini (${Math.round(pd.f * 100)}% bertumpuk): ${b.nib ? 'NIB ' + esc(b.nib) + ', ' : ''}${b.su ? esc(b.su.teks) + ', ' : ''}luas <b>${Lp} m²</b>${lin ? ` (luas SU ${fmt(lin, 0)} m², selisih ${fmt(d, 1)}%)` : ''}.`); }
+      PERSIL._hasil = b;
+      tanda(Math.abs(d) <= 10 ? 'ok' : 'info', `Bidang persil di lokasi ini (${Math.round(pd.f * 100)}% bertumpuk): ${b.nib ? 'NIB ' + esc(b.nib) + ', ' : ''}${b.hak ? esc(b.hak) + ', ' : ''}${b.su ? esc(b.su.teks) + ', ' : ''}luas <b>${Lp} m²</b>${lin ? ` (luas SU ${fmt(lin, 0)} m², selisih ${fmt(d, 1)}%)` : ''}. Nomor ini hanya untuk Anda validasi.${pd.f >= 0.6 ? '<br><button class="btn" data-salin-persil style="margin-top:6px">Salin bidang persil ini ke AutoCAD (koordinat persis)</button>' : ''}`); }
   } catch (e) { /* abaikan */ }
   if (r) {
     if (r.score < 0.65) tanda('bad', 'Skor kecocokan jalan rendah. Posisi belum meyakinkan.');
@@ -2576,7 +2597,7 @@ const salinAcad = safe('Salin untuk AutoCAD', async () => {
   }
   const n = 1 + S.extra.length;
   LOG.info(`Perintah AutoCAD disalin (${$('inAcadFmt').value}): ${n} polyline, ${CORE.CRS[SET.crs].nama}, ${txt.length} karakter`);
-  toast(ok ? `Tersalin (${n} bidang). Di AutoCAD: Esc, klik command line, Ctrl+V, lalu Enter.` : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
+  toast(ok ? ($('inAcadFmt').value === 'lisp' ? `Tersalin (${n} bidang). Di AutoCAD ketik TB lalu Enter. Belum punya TB? Klik "Unduh perintah TB", atau tempel di command line (bukan area gambar) lalu Enter.` : `Tersalin (${n} bidang). Di AutoCAD: Esc, klik command line, Ctrl+V, lalu Enter.`) : 'Browser menolak menyalin otomatis. Teks sudah dipilih di kotak "Lihat isi yang disalin"; tekan Ctrl+C.', ok ? 'ok' : 'warn');
 });
 
 /* ---------- berkas BT / SU (PDF hasil scan) — diproses hanya di browser ---------- */
@@ -3489,6 +3510,7 @@ function confPola(i) {
   if (c[i].tempel != null) { // dengan data persil (aturan dikalibrasi pada tuning persil; uji akhir Sidomulyo 19/20 benar)
     const t2 = c[i + 1] && c[i + 1].tempel != null ? c[i + 1].tempel : 0;
     if (i === 0 && c[0].tempel >= 0.5 && t2 < 0.3 && sc >= 0.8) return [`keyakinan tinggi: ${Math.round(c[0].tempel * 100)}% sisi menempel bidang persil`, 'b-ok'];
+    if (c[i].persilB) return [`bertumpuk dengan bidang persil (bentuk ${Math.round(c[i].bentuk * 100)}% mirip, luas ${Math.round(c[i].persilB.luasPoligon)} m²): validasi`, sc >= 0.65 ? 'b-mid' : 'b-low'];
     return [`perlu verifikasi: ${Math.round(c[i].tempel * 100)}% sisi menempel bidang persil`, sc >= 0.65 ? 'b-mid' : 'b-low'];
   }
   if (i === 0) {
@@ -3580,7 +3602,7 @@ function bukaSetAI() {
    (3) bidang tidak boleh menimpa bidang persil; kandidat yang sisinya menempel bidang tetangga diutamakan.
    Setelan dikunci dari benchmark tuning (tests/benchmark/persil.js): k=3, r=60 m, bobot tempel 0,2. */
 const PERSIL = { bidang: [], file: [], pakai: true }; // pakai: dipilih lewat tombol 'Mulai pencocokan' (false) / 'Dengan bantuan persil' (true)
-const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000 };
+const PERSIL_ATUR = { k: 3, r: 60, wTempel: 0.2, tempelM: 1.5, refMaksLuas: 5000, luasTol: 0.15, bentukMin: 0.8, wBentuk: 0.1 };
 function idb() { return new Promise((ok, no) => { const r = indexedDB.open('plotkw', 1); r.onupgradeneeded = () => r.result.createObjectStore('data'); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
 async function idbSet(k, v) { const d = await idb(); return new Promise((ok, no) => { const t = d.transaction('data', 'readwrite'); t.objectStore('data').put(v, k); t.oncomplete = ok; t.onerror = () => no(t.error); }); }
 async function idbGet(k) { const d = await idb(); return new Promise((ok, no) => { const r = d.transaction('data').objectStore('data').get(k); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); }); }
@@ -3675,7 +3697,40 @@ function lingkaranSU() {
     .map(b => { const c = PROJ.fwd(b.c[0], b.c[1]); return { x: c[0], y: c[1], r: PERSIL_ATUR.r, su: b.su.nomor + '/' + b.su.tahun, ll: b.c }; }).filter(c => inAreaFn(c.x, c.y));
   return tet.length ? tet : null;
 }
+// kemiripan bentuk sketsa (meter) dengan poligon persil: porsi saling tumpuk setelah disamakan luas & pusatnya, diputar dalam toleransi utara
+function miripBentuk(skM, pW, thTol) {
+  const cA = CORE.centroid(skM), cB = CORE.centroid(pW), k = Math.sqrt(CORE.polyArea(pW) / CORE.polyArea(skM));
+  const A = skM.map(p => [(p[0] - cA[0]) * k, (p[1] - cA[1]) * k]), B = pW.map(p => [p[0] - cB[0], p[1] - cB[1]]);
+  const bbOf = P => [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])), Math.max(...P.map(p => p[0])), Math.max(...P.map(p => p[1]))];
+  const sB = CORE.interiorSamples(B, 40), Bb = { pts: B, bb: bbOf(B) }; let best = { s: -1 };
+  for (let a = -thTol; a <= thTol + 1e-9; a += 3 * DEG) {
+    const c = Math.cos(a), sn = Math.sin(a), R = A.map(p => [c * p[0] - sn * p[1], sn * p[0] + c * p[1]]);
+    const v = Math.min(CORE.overlapFrac(CORE.interiorSamples(R, 40), [Bb]), CORE.overlapFrac(sB, [{ pts: R, bb: bbOf(R) }]));
+    if (v > best.s) best = { s: v, a, k };
+  }
+  return best;
+}
+// kandidat "tumpuk": bidang persil di kelurahan yang luasnya (±15%) dan bentuknya mirip sketsa. Label NIB/hak/SU tidak dipakai.
+async function kandidatBentukPersil(cands, s0, opt) {
+  const L0 = getLuas(); if (!L0 || !CTX || !PROJ) return 0;
+  const B = wilBBox(), m = 0.003, thTol = opt.thTol != null && opt.th0 != null ? opt.thTol : Math.PI;
+  const skM = CTX.parcelM.map(p => [p[0] * s0, p[1] * s0]), cA = CORE.centroid(CTX.parcelM), pc = CTX.parcelC;
+  const pool = PERSIL.bidang.filter(b => b.luasPoligon < PERSIL_ATUR.refMaksLuas && Math.abs(b.luasPoligon / L0 - 1) <= PERSIL_ATUR.luasTol && !(b.bb[2] < B.s - m || b.bb[0] > B.n + m || b.bb[3] < B.w - m || b.bb[1] > B.e + m));
+  let n = 0, i = 0;
+  for (const b of pool) {
+    if (++i % 25 === 0) { cekBatal(); await sleep(0); }
+    const pw = b.ll.map(p => PROJ.fwd(p[0], p[1])), cq = CORE.centroid(pw); if (!inAreaFn(cq[0], cq[1])) continue;
+    const mb = miripBentuk(skM, pw, thTol); if (mb.s < PERSIL_ATUR.bentukMin) continue;
+    const T = { s: s0 * mb.k, th: mb.a, tx: 0, ty: 0 }, p0 = CORE.fwdT(T, cA[0], cA[1]); T.tx = cq[0] - p0[0]; T.ty = cq[1] - p0[1];
+    const lama = cands.find(u => { const q = CORE.fwdT(u.T, pc[0], pc[1]), p = CORE.fwdT(T, pc[0], pc[1]); return Math.hypot(p[0] - q[0], p[1] - q[1]) < 5; });
+    if (lama) { if (!lama.bentuk || mb.s > lama.bentuk) { lama.bentuk = mb.s; lama.persilB = b; } continue; }
+    cands.push({ T, r: CORE.score(CTX, T, true), bentuk: mb.s, persilB: b }); n++;
+  }
+  LOG.info(`Bantuan persil: ${pool.length} bidang persil berluas mirip (±${PERSIL_ATUR.luasTol * 100}%), ${n} kandidat baru dengan bentuk mirip`);
+  return n;
+}
 async function tambahKandidatPersil(cands, s0, opt, logf) {
+  try { await kandidatBentukPersil(cands, s0, opt); } catch (e) { if (e.batal) throw e; LOG.warn('Pencarian bidang persil berbentuk mirip gagal', e.message); }
   const cs = lingkaranSU(); PERSIL._cs = cs;
   if (!cs) { LOG.info('Bantuan persil: tidak ada SU bernomor dekat di kelurahan ini; kandidat dari seluruh kelurahan'); return cands; }
   PERSIL._areaB = (x, y) => inAreaFn(x, y) && dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA);
@@ -3704,8 +3759,9 @@ function tempelPersil(T, ctx, ref) {
 }
 function urutPersil(cands, ctx) {
   const ref = polaRef(); if (!ref || !ref.length || !ctx) return cands;
-  const o = cands.map(k => ({ ...k, tempel: tempelPersil(k.T, ctx, ref) })).sort((a, b) => (b.r.score + PERSIL_ATUR.wTempel * b.tempel) - (a.r.score + PERSIL_ATUR.wTempel * a.tempel));
-  LOG.info('Kandidat diurutkan ulang dengan data persil (sisi menempel)', o.map(k => ({ skor: +k.r.score.toFixed(3), tempel: +k.tempel.toFixed(2) })));
+  const nilai = k => k.r.score + PERSIL_ATUR.wTempel * k.tempel + PERSIL_ATUR.wBentuk * (k.bentuk || 0);
+  const o = cands.map(k => ({ ...k, tempel: tempelPersil(k.T, ctx, ref) })).sort((a, b) => nilai(b) - nilai(a));
+  LOG.info('Kandidat diurutkan ulang dengan data persil (jalan + sisi menempel + bentuk & luas)', o.map(k => ({ skor: +k.r.score.toFixed(3), tempel: +k.tempel.toFixed(2), bentuk: k.bentuk ? +k.bentuk.toFixed(2) : 0 })));
   return o.map((k, i) => ({ ...k, label: '#' + (i + 1) }));
 }
 // SU yang sedang dicari sudah ada di data persil?
@@ -3721,15 +3777,18 @@ function renderSUPersil() {
   el.innerHTML = `<b>SU ini sudah ada di data persil.</b> ${b.nib ? 'NIB ' + esc(b.nib) + ', ' : ''}${esc(b.hak || 'nomor hak –')}, luas ${b.luas ?? Math.round(b.luasPoligon)} m².
     <div class="row" style="margin-top:6px"><button class="btn" id="btnPersilLihat">Lihat di peta</button><button class="btn pri" id="btnPersilSalin">Salin bidang persil ke AutoCAD</button></div>`;
   $('btnPersilLihat').onclick = () => { if (!map) return; map.fitBounds(L.latLngBounds(b.ll).pad(2), { maxZoom: 20 }); L.popup().setLatLng(b.c).setContent(`SU ${b.su.nomor}/${b.su.tahun}${b.nib ? ' · NIB ' + esc(b.nib) : ''}`).openOn(map); };
-  $('btnPersilSalin').onclick = safe('Salin bidang persil', async () => {
-    const xy = b.ll.map(p => CORE.crsFwd(SET.crs, p[0], p[1])), txt = perintahDariXY([xy]);
-    await navigator.clipboard.writeText(txt).catch(() => { throw new Error('Clipboard ditolak browser. Coba lagi.'); });
-    LOG.info(`Bidang persil SU ${b.su.nomor}/${b.su.tahun} disalin untuk AutoCAD (${SET.crs})`);
-    toast('Bidang persil tersalin dengan koordinat persis dari data persil. Tempel di command line AutoCAD, tekan Enter sekali.', 'ok');
-  });
+  $('btnPersilSalin').onclick = () => salinPersil(b);
 }
+const salinPersil = safe('Salin bidang persil', async b => {
+  const xy = b.ll.map(p => CORE.crsFwd(SET.crs, p[0], p[1])), txt = perintahDariXY([xy]);
+  await navigator.clipboard.writeText(txt).catch(() => { throw new Error('Clipboard ditolak browser. Coba lagi.'); });
+  LOG.info(`Bidang persil disalin untuk AutoCAD (${SET.crs}), luas poligon ${Math.round(b.luasPoligon)} m²`);
+  toast('Bidang persil tersalin dengan koordinat persis. Di AutoCAD ketik TB lalu Enter (atau tempel di command line, Enter sekali).', 'ok');
+});
 async function initPersil() {
   if ($('btnBatal')) $('btnBatal').onclick = batalkanProses;
+  if ($('btnUnduhTB')) $('btnUnduhTB').onclick = unduhTB;
+  document.addEventListener('click', e => { if (e.target && e.target.closest && e.target.closest('[data-salin-persil]') && PERSIL._hasil) salinPersil(PERSIL._hasil); });
   if (!$('filePersil')) return;
   $('filePersil').onchange = e => { muatPersil(e.target.files); e.target.value = ''; };
   $('btnPersilHapus').onclick = safe('Hapus data persil', async () => { PERSIL.bidang = []; PERSIL.file = []; await idbSet('persil', null).catch(() => {}); renderPersilInfo(); gambarPersil(); renderPola(); toast('Data persil dihapus dari browser ini.', 'ok'); });
@@ -3789,6 +3848,7 @@ function bidangPersilDi(lat, lon) {
   return best;
 }
 function teksPersil(b) {
+  if (!b.nib && !b.su && !b.hak && !b.luas) return `<b>Poligon tanpa label</b><br>Luas poligon ${Math.round(b.luasPoligon).toLocaleString('id-ID')} m²${b.luasPoligon > 5000 ? '<br><span class="hint">Kemungkinan blok, jalan, atau batas wilayah.</span>' : ''}`;
   return `<b>${b.nib ? 'NIB ' + esc(b.nib) : 'Tanpa NIB'}</b><br>${esc(b.hak || 'Nomor hak: –')}<br>${esc(b.su ? b.su.teks : 'SU: –')}<br>Luas ${b.luas ? '<b>' + b.luas + ' m²</b> (label)' : '–'} · poligon ${Math.round(b.luasPoligon)} m²`;
 }
 // bidang persil di posisi hasil (tumpang tindih terbesar), untuk pemeriksaan data
@@ -3802,6 +3862,30 @@ function persilDiHasil() {
     if (f > 0.05 && (!best || f > best.f)) best = { b, f };
   }
   return best;
+}
+
+// Perintah TB untuk AutoCAD: membaca papan klip (hasil "Salin bidang") dan menjalankannya → bidang tergambar di koordinat asli
+function unduhTB() {
+  const lsp = [
+    ';; TB.lsp - Plot Bidang Samarinda. Ketik TB setelah menekan "Salin bidang untuk AutoCAD".',
+    '(vl-load-com)',
+    '(defun plotbidang-klip (/ h tx)',
+    '  (setq h (vlax-create-object "htmlfile"))',
+    '  (setq tx (vl-catch-all-apply (function (lambda () (vlax-invoke (vlax-get (vlax-get h \'ParentWindow) \'ClipboardData) \'GetData "Text")))))',
+    '  (vlax-release-object h)',
+    '  (if (vl-catch-all-error-p tx) nil tx))',
+    '(defun c:TB (/ s e)',
+    '  (setq s (plotbidang-klip))',
+    '  (cond',
+    '    ((not (and s (= (type s) \'STR) (wcmatch s "(progn*"))) (princ "\\nPapan klip bukan bidang dari Plot Bidang. Klik dulu \\"Salin bidang untuk AutoCAD\\" (jenis: AutoCAD / Map 3D)."))',
+    '    (t (setq e (vl-catch-all-apply (function eval) (list (read s))))',
+    '       (if (vl-catch-all-error-p e) (princ (strcat "\\nGagal menggambar: " (vl-catch-all-error-message e))))))',
+    '  (princ))',
+    '(princ "\\nPlot Bidang: perintah TB siap. Salin bidang di web, lalu ketik TB.")',
+    '(princ)', ''
+  ].join('\r\n');
+  download(new Blob([lsp], { type: 'text/plain' }), 'TB.lsp');
+  toast('TB.lsp diunduh. Di AutoCAD: APPLOAD → pilih TB.lsp → Load. Setelah itu cukup ketik TB setiap selesai menyalin.', 'ok');
 }
 
 </script>
