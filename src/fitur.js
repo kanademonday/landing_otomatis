@@ -1092,11 +1092,24 @@ const POLA = { on: false, rBawaan: 150, kTetangga: 3, maksSelisihNomor: 300, eps
 const SUKET = (() => { try { return JSON.parse(localStorage.getItem('plotkw.suket') || '{}'); } catch (e) { return {}; } })();
 const kunciSU = (kel, no) => kel + '#' + (+no);
 function simpanSuket() { try { localStorage.setItem('plotkw.suket', JSON.stringify(SUKET)); } catch (e) { /* abaikan */ } }
+// SU baru: kode & tahun lama selalu diganti (tidak terbawa dari SU / kelurahan sebelumnya)
 function setNomorSU(no, kode, tahun) {
-  if (kode) POLA.su.kode = kode; if (tahun) POLA.su.tahun = +tahun;
-  if ($('inNoSU')) { $('inNoSU').value = +no; if ($('inThSU') && tahun) $('inThSU').value = +tahun; renderPola(); }
+  POLA.su.kode = kode || null; POLA.su.tahun = +tahun || null;
+  if ($('inNoSU')) { $('inNoSU').value = no ? +no : ''; if ($('inThSU')) $('inThSU').value = tahun ? +tahun : ''; renderPola(); }
 }
-function kodeKelAktif() { if (POLA.su.kode) return POLA.su.kode; const kel = $('inKel').value; for (const k in KODE_KEL) if (KODE_KEL[k][1] === kel) return k; return null; }
+// kode kelurahan untuk mencari SU tetangga: hanya bila cocok dengan kelurahan yang dipilih
+function kodeKelAktif() {
+  const kel = $('inKel').value;
+  if (POLA.su.kode) { const k = KODE_KEL[POLA.su.kode]; if (!k || k[1] === kel) return POLA.su.kode; return null; }
+  for (const k in KODE_KEL) if (KODE_KEL[k][1] === kel) return k; return null;
+}
+// dipanggil saat wilayah berganti / bidang baru: buang petunjuk yang tidak berlaku lagi
+function resetPola(alasan) {
+  const ada = POLA.titik || POLA.su.kode || ($('inNoSU') && $('inNoSU').value);
+  POLA.titik = null; POLA.su = { kode: null, tahun: null };
+  if ($('inNoSU')) $('inNoSU').value = ''; if ($('inThSU')) $('inThSU').value = '';
+  if (ada) LOG.info('Petunjuk lokasi mode pola dikosongkan: ' + alasan);
+}
 // Area pencarian = satu atau beberapa lingkaran. Urutan: titik perkiraan → SU tetangga di data persil → SU yang sudah ditandai ketemu.
 function areaPola() {
   if (!POLA.on) return null;
@@ -1117,17 +1130,25 @@ function areaPola() {
   return { lingkaran: [{ lat, lon, r: Math.max(POLA.rBawaan, 1.5 * sebar) }], sumber: `${tet.length} SU tetangga yang sudah ketemu (no. ${tet.map(x => x.nomor).join(', ')})` };
 }
 function lingkaranXY(a) { return a.lingkaran.map(L0 => { const c = PROJ.fwd(L0.lat, L0.lon); return { x: c[0], y: c[1], r: L0.r }; }); }
+// buang lingkaran yang pusatnya di luar kelurahan terpilih (petunjuk dari kelurahan lain tidak boleh menarik pencarian)
+function areaPolaSah() {
+  const a = areaPola(); if (!a || !PROJ || !inAreaFn) return null;
+  const sah = a.lingkaran.filter(L0 => { const c = PROJ.fwd(L0.lat, L0.lon); return inAreaFn(c[0], c[1]); });
+  if (!sah.length) { if (!areaPolaSah._lapor) { LOG.warn('Petunjuk lokasi berada di luar kelurahan terpilih, diabaikan', { sumber: a.sumber }); areaPolaSah._lapor = true; } return null; }
+  areaPolaSah._lapor = false;
+  return sah.length === a.lingkaran.length ? a : { ...a, lingkaran: sah };
+}
 function dalamArea(cs, x, y, ex) { return cs.some(c => Math.hypot(x - c.x, y - c.y) < c.r + ex); }
 // Simpang/ruas jangkar boleh sampai 100 m di luar lingkaran (simpang sketsa bisa jauh dari bidang);
 // kandidat akhir disaring: pusat bidang harus di dalam salah satu lingkaran (saringPola).
 const POLA_JANGKAR_EKSTRA = 100;
 function polaInArea() {
-  const a = areaPola(); if (!a || !PROJ) return null;
-  const cs = lingkaranXY(a);
-  return (x, y) => dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA);
+  const a = areaPolaSah(); if (!a) return null;
+  const cs = lingkaranXY(a), kel = inAreaFn;
+  return (x, y) => kel(x, y) && dalamArea(cs, x, y, POLA_JANGKAR_EKSTRA); // tetap di dalam kelurahan
 }
 function saringPola(cands, ctx) {
-  const a = areaPola(); if (!a || !PROJ || !ctx) return cands;
+  const a = areaPolaSah(); if (!a || !ctx) return cands;
   const cs = lingkaranXY(a), pc = ctx.parcelC;
   const out = cands.filter(k => { const p = CORE.fwdT(k.T, pc[0], pc[1]); return dalamArea(cs, p[0], p[1], 0); });
   if (out.length < cands.length) LOG.info(`Mode pola: ${cands.length - out.length} kandidat di luar area perkiraan dibuang`);
@@ -1136,7 +1157,8 @@ function saringPola(cands, ctx) {
 }
 function infoPola() {
   if (!POLA.on) return '';
-  const a = areaPola();
+  if (areaPola() && !areaPolaSah()) return '<li class="qc-warn">Mode pola: petunjuk lokasi berada di luar kelurahan terpilih dan diabaikan. Periksa kelurahan, nomor/tahun SU, atau hapus titik perkiraan.</li>';
+  const a = areaPolaSah();
   return a ? `<li class="qc-ok">Mode pola: pencarian dipersempit ke ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran' : 'lingkaran'} radius ${Math.round(a.lingkaran[0].r)} m (${esc(a.sumber)})</li>`
     : '<li class="qc-info">Mode pola aktif, tetapi belum ada titik perkiraan, data persil yang cocok, atau SU tetangga yang sudah ketemu: dicari di seluruh kelurahan.</li>';
 }
@@ -1160,13 +1182,13 @@ function gambarAreaPola() {
   if (!map) return;
   if (!G.pola) G.pola = L.layerGroup().addTo(map);
   G.pola.clearLayers();
-  const a = areaPola();
+  const a = areaPolaSah();
   if (a) for (const L0 of a.lingkaran) L.circle([L0.lat, L0.lon], { radius: L0.r, color: '#1F5E5B', weight: 2, dashArray: '4 6', fill: false, interactive: false }).addTo(G.pola);
 }
 function renderPola() {
   if (!$('polaBox')) return;
   $('polaBox').hidden = !POLA.on; if ($('btnTandaKetemu')) $('btnTandaKetemu').hidden = !POLA.on;
-  const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPola();
+  const kel = $('inKel').value, n = Object.values(SUKET).filter(x => x.kel === kel).length, a = areaPolaSah();
   $('suketInfo').textContent = kel ? `${n} SU di ${kel} sudah tercatat ketemu (tersimpan di browser ini).` : 'Pilih kelurahan dulu di langkah 1.';
   $('polaArea').innerHTML = !POLA.on ? '' : a ? `Area pencarian: ${a.lingkaran.length > 1 ? a.lingkaran.length + ' lingkaran ' : ''}radius <b>${Math.round(a.lingkaran[0].r)} m</b>, dari ${esc(a.sumber)}.` : 'Belum ada area: dicari di seluruh kelurahan.';
   renderSUPersil();
@@ -1293,7 +1315,7 @@ function gambarPersil() {
 }
 // bidang persil di dalam area (koordinat lokal), untuk penalti tumpang tindih & hitung "sisi menempel"
 function polaRef() {
-  const a = areaPola(); if (!a || !a.persil || !PROJ) return undefined;
+  const a = areaPolaSah(); if (!a || !a.persil) return undefined;
   const cs = lingkaranXY(a);
   const ref = PERSIL.bidang.filter(b => b.luasPoligon < PERSIL_ATUR.refMaksLuas && (b.nib || b.su || b.hak)).map(b => b.ll.map(p => PROJ.fwd(p[0], p[1])))
     .filter(pp => { const q = CORE.centroid(pp); return dalamArea(cs, q[0], q[1], 150); });

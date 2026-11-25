@@ -2,6 +2,12 @@
 
 Versi terbaru di atas. Nomor versi juga tampil di samping judul aplikasi (klik untuk membuka halaman ini).
 
+## v2.14.2 — 2026-11-25 — Perbaikan mode pola: pencarian tidak lagi tertarik keluar kelurahan
+- Petunjuk lokasi (titik perkiraan, kode & tahun SU) dari SU atau kelurahan sebelumnya kini dikosongkan saat kelurahan berganti dan saat *Bidang baru*; membuka SU baru selalu mengganti kode & tahun (sebelumnya kode lama terbawa bila nama file baru tidak memuatnya).
+- Kode SU yang milik kelurahan lain tidak dipakai untuk mencari SU tetangga di data persil.
+- Area mode pola kini **dipersempit di dalam** kelurahan terpilih, bukan menggantikannya; lingkaran yang pusatnya di luar kelurahan diabaikan dengan peringatan di "Siap dicocokkan".
+- Uji: tests/e2e/run12.py (titik basi 3 km di luar kelurahan → hasil sama dengan tanpa mode pola, semua kandidat di dalam kelurahan).
+
 ## v2.14.1 — 2026-11-25
 - Perbaikan: bilah proses di kiri bawah tidak hilang setelah *Baca saja* / *Digitasi otomatis* selesai (gaya tampilan menimpa atribut tersembunyi). Semua elemen bertanda tersembunyi kini pasti tidak tampil; tombol di bilah juga bisa menutupnya bila tidak ada proses.
 

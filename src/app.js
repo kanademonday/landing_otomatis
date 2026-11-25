@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.14.1';
+const APP_VERSION = '2.14.2';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -281,6 +281,7 @@ const pilihDariDaftar = safe('Pilih kelurahan', async () => {
 });
 function bidangBaru(silent) {
   if (SK.cur) SK.cur = null;
+  try { resetPola('bidang baru'); } catch (e) { /* abaikan */ }
   S.img = null; imgEl = null; S.roads = []; S.parcel = null; S.cps = []; S.extra = []; S.cands = []; S.sel = -1; S.T = null; S.aiBackup = null; CTX = null;
   for (const id of ['inLuas', 'inSkala', 'inNama', 'inRoadName', 'inExtraName']) $(id).value = '';
   $('qcInfo').innerHTML = ''; resetRiwayat(); aturOverlay();
@@ -354,7 +355,7 @@ function setWilayah(w) {
   G.osm && G.osm.clearLayers(); G.cand && G.cand.clearLayers(); G.res && G.res.clearLayers();
   LOG.info('Wilayah dipilih: ' + w.name, { ring: w.rings.length, titik: w.rings.reduce((a, r) => a + r.length, 0) });
   markDone();
-  try { gambarPersil(); renderPola(); } catch (e) { /* abaikan */ }
+  try { resetPola('kelurahan berganti'); gambarPersil(); renderPola(); } catch (e) { /* abaikan */ }
 }
 function drawWilayah() {
   if (!map || !S.wil) return;
