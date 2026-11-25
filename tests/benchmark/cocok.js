@@ -4,7 +4,7 @@ const DEG = Math.PI / 180;
 async function cocokkan(Wl, K) {
   const s0 = Math.sqrt(K.luas / CORE.polyArea(K.parcel)), v = CFG.variasi_skala;
   const scales = [1 - v / 2, 1, 1 + v / 2].map(k => k * s0);
-  const north = K.utara !== 'bebas', th0 = north ? 0 : null, thTol = (K.utara === 'yakin' ? 15 : 45) * DEG;
+  const north = K.utara !== 'bebas', th0 = north ? 0 : null, thTol = ({ pasti: 3, yakin: 15 }[K.utara] || 45) * DEG;
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
   if (pola) opt.pola = pola;
   const build = tanpaNama => CORE.prepareCtx({ ways: Wl.osm.ways, nodeXY: Wl.nodeXY, roadsImg: tanpaNama ? K.roads.map(r => ({ ...r, name: '' })) : K.roads, parcelImg: K.parcel, imgW: K.imgW, imgH: K.imgH,

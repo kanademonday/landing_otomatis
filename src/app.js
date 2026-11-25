@@ -1,5 +1,5 @@
 /* ===== APLIKASI ===== */
-const APP_VERSION = '2.15.0';
+const APP_VERSION = '2.16.0';
 const DEG = CORE.DEG;
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -825,7 +825,7 @@ function renderReady() {
     ok(S.roads.length > 0, `Jalan di sketsa: ${S.roads.length} (simpang ${SK.junc.length})`),
     ok(!!S.parcel, 'Bidang tanah digambar'),
     ok(!!L0, L0 ? 'Luas tanah: ' + fmt(L0, 0) + ' m²' : 'Luas tanah (m²) belum diisi di langkah 2'),
-    ({ yakin: '<li class="qc-ok">Utara = atas gambar, yakin (±15°)</li>', kira: '<li class="qc-ok">Utara = atas gambar, kira-kira (±45°)</li>' }[$('inNorthMode').value] || '<li class="qc-info">Arah utara tidak dipakai, putaran dicari bebas</li>')
+    ({ pasti: '<li class="qc-ok">Utara = atas gambar, yakin sekali (±3°)</li>', yakin: '<li class="qc-ok">Utara = atas gambar, yakin (±15°)</li>', kira: '<li class="qc-ok">Utara = atas gambar, kira-kira (±45°)</li>' }[$('inNorthMode').value] || '<li class="qc-info">Arah utara tidak dipakai, putaran dicari bebas</li>')
   ];
   if (S.roads.some(r => (r.name || '').trim())) items.push('<li class="qc-info">Nama jalan dipakai sebagai petunjuk saja; peringkat tetap dari bentuk jalan.</li>');
   let warn = '';
@@ -868,7 +868,7 @@ const runMatch = safe('Pencocokan', async () => {
   // gambar terbukti berskala (luas cocok dengan skala 1:N) → rentang skala dipersempit
   if (S.parcel && typeof cekSkala === 'function') { const sk = cekSkala(Math.sqrt(getLuas() / Math.abs(CORE.polyArea(S.parcel)))); if (sk && Math.abs(sk.beda) <= 10 && v > 0.1) { v = 0.1; LOG.info('Gambar berskala (luas cocok dengan skala gambar): rentang skala dipersempit ke ±10%'); } }
   const scales = [1 - v / 2, 1, 1 + v / 2].map(k => k * s0);
-  const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = (nm === 'yakin' ? 15 : 45) * DEG;
+  const nm = $('inNorthMode').value, north = nm !== 'bebas', th0 = north ? 0 : null, thTol = ({ pasti: 3, yakin: 15 }[nm] || 45) * DEG;
   const opt = { scales, th0, thTol, bounds: { smin: s0 * (1 - v), smax: s0 * (1 + v), th0, thTol } };
   LOG.info('Mulai pencocokan', { s0, scales, utara: nm, putarGambar: ROT.deg, tau: +$('inTau').value, jalanSketsa: S.roads.length, simpangSketsa: SK.junc.length });
   $('btnMatch').disabled = true; if ($('btnMatchPersil')) $('btnMatchPersil').disabled = true; $('prog').style.width = '2%'; $('progTx').textContent = 'Menyiapkan peta jarak…';
